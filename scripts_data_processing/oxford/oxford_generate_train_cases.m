@@ -13,7 +13,7 @@
 
 %% Configuration (Update DST_FOLDER, as in oxford_build_pointsclouds.m)
 clear
-DST_FOLDER = '../../../data/oxford/train';  % Should be the same as in oxford_build_pointsclouds.m
+DST_FOLDER = '../../data/oxford/train';  % Should be the same as in oxford_build_pointsclouds.m
 
 POSITIVE_THRESH = 5;  % positive sets must be less than 5m away
 NEGATIVE_THRESH = 50  ;  % negative sets must be more than 50m away

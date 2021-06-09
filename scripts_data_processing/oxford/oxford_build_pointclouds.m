@@ -19,9 +19,9 @@ clear
 addpath('internal');
 
 % Set the path to the downloaded data here
-FOLDER = '../../../data_raw/oxford';
+FOLDER = '../../data_output';
 % Path for processed data
-DST_FOLDER = '../../../data/oxford/train';
+DST_FOLDER = '../../data/oxford/train';
 
 % Origin pose: All point clouds use this point as a reference
 ORIGIN_POSE = [0, 1, 0, 5735000;
@@ -35,9 +35,9 @@ ORIGIN_POSE = [0, 1, 0, 5735000;
 datasets = readtable('datasets_train.txt', 'ReadVariableNames', false);
 datasets = datasets.Var1;
 
-
+M = feature('numcores');
 totalClouds = 0;
-for d = 1 : length(datasets)
+parfor (d = 1 : length(datasets), M)
 
     if ~exist(fullfile(FOLDER, datasets{d}), 'dir')
         continue
@@ -48,7 +48,7 @@ for d = 1 : length(datasets)
         nClouds = BuildPointclouds(fullfile(FOLDER, datasets{d}), DST_FOLDER, ORIGIN_POSE);
         
         totalClouds = totalClouds + nClouds;
-        fprintf('Total: %i clouds generated', totalClouds);
+        % fprintf('Total: %i clouds generated', totalClouds);
     else
         % Skip datasets already created
         fprintf('Skipping %s\n', datasets{d})

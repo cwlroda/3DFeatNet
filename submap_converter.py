@@ -6,13 +6,24 @@ from numpy import matlib as mb
 from scipy import spatial
 import multiprocessing as mp
 from multiprocessing import Pool
+import csv
 
 FEATURE_DIM = 32
 
 def writeBin(file, data):
-    filename = os.path.basename(file).split('.')[0] + '_3dfeatnet.txt'
-    outfile = os.path.join('./Data/', filename)
-    np.savetxt(outfile, data, delimiter=',')
+    parent_dir = os.path.join(file.split('/')[-2], 'lms_front/')
+    filename = os.path.basename(file).split('.')[0] + '_3dfeatnet.bin'
+    outdir = os.path.join('data_output/', parent_dir)
+
+    try:
+        os.mkdir(outdir)
+    except:
+        pass
+
+    outfile = os.path.join(outdir, filename)
+
+    data.tofile(outfile)
+    # np.savetxt(outfile, data, delimiter=',')
 
 def kClosest(points, K):
     n = []
@@ -33,7 +44,7 @@ def computeNorms(points, numNeighbours=9, viewPoint=[0.0,0.0,0.0], dirLargest=Tr
     p = np.reshape(p, (len(points), numNeighbours, 3))
 
     # calculate values for covariance matrix
-    C = np.zeros((len(points), 6));
+    C = np.zeros((len(points), 6))
     C[:,0] = np.sum(np.multiply(p[:,:,0], p[:,:,0]), 1)
     C[:,1] = np.sum(np.multiply(p[:,:,0], p[:,:,1]), 1)
     C[:,2] = np.sum(np.multiply(p[:,:,0], p[:,:,2]), 1)
@@ -80,13 +91,96 @@ def computeNorms(points, numNeighbours=9, viewPoint=[0.0,0.0,0.0], dirLargest=Tr
 
     return normals
 
+def createINS(file, vals):
+    header = ['timestamp',
+              'ins_status',
+              'latitude',
+              'longitude',
+              'altitude',
+              'northing',
+              'easting',
+              'down',
+              'utm_zone',
+              'velocity_north',
+              'velocity_east',
+              'velocity_down',
+              'roll',
+              'pitch',
+              'yaw']
+
+    timestamp = vals[0]
+    valid = 'INS_SOLUTION_GOOD' if vals[3] else 'INS_BAD_GPS_AGREEMENT'
+    longitude = vals[4]
+    latitude = vals[5]
+    altitude = vals[6]
+    roll = vals[7]
+    pitch = vals[8]
+    yaw = vals[9]
+
+    data = [timestamp,
+            valid,
+            latitude,
+            longitude,
+            altitude,
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            '',
+            roll,
+            pitch,
+            yaw]
+
+    parent_dir = os.path.join(file.split('/')[-2], 'gps/')
+    outdir = os.path.join('data_output/', parent_dir)
+    outfile = os.path.join(outdir, 'ins.csv')
+
+    try:
+        os.mkdir(outdir)
+    except:
+        pass
+
+    file_exists = os.path.isfile(outfile)
+
+    with open(outfile, 'a') as out:
+        writer = csv.writer(out)
+
+        if not file_exists:
+            writer.writerow(header)
+
+        writer.writerow(data)
+
+def createTimestamp(file, timestamp):
+    parent_dir = file.split('/')[-2]
+    outdir = os.path.join('data_output/', parent_dir)
+    outfile = os.path.join(outdir, 'lms_front.timestamps')
+
+    with open(outfile, 'a') as out:
+        out.write(str(timestamp))
+        out.write(' 1')
+        out.write('\n')
+
+def createMetadata(file, data):
+    parent_dir = file.split('/')[-2]
+    outdir = os.path.join('data_output/', parent_dir)
+    outfile = os.path.join(outdir, 'metadata.txt')
+
+    with open(outfile, 'w') as out:
+        pass
+
 def convert(file):
     points = []
+    vals = []
 
     if file.endswith('bin'):
         with open(file, 'r') as f:
             dt = np.dtype('i8,i4,i8,?,f8,f8,f8,f8,f8,f8,f8,f8,f8,f8,f8,f8,i4,i4')
             vals = list(np.fromfile(f, dtype=dt, count=1)[0])
+
+        # createINS(file, vals)
+        # createTimestamp(file, vals[0])
 
             numFeatures = vals[16]
             numPoints = vals[17]
@@ -101,23 +195,27 @@ def convert(file):
                 points.append(list(np.fromfile(f, dtype=np.dtype('f4,f4,f4'), count=1)[0]))
                 _ = np.fromfile(f, dtype=np.dtype('f4,f4,f4,u1,u1,u1,i8'), count=1)
 
-        points = np.array(points)
-        normals = np.zeros_like(points)
-        # normals = computeNorms(points)
+            createMetadata(file, data)
+        # points = np.array(points)
+        # normals = np.zeros_like(points)
+        # # normals = computeNorms(points)
 
-        data = np.block([points, normals])
-        data = np.float32(data)
+        # data = np.block([points, normals])
+        # data = np.float32(data)
 
-        writeBin(file, data)
+        # writeBin(file, data)
 
-        print('Succesfully converted {}'.format(file))
+        # print('Succesfully converted {}'.format(file))
 
 if __name__ == '__main__':
     numCores = mp.cpu_count()
     start = time.time()
 
-    with Pool(numCores) as p:
-        p.map(convert, [sys.argv[i] for i in range(1, len(sys.argv))])
+    # with Pool(numCores) as p:
+    #     p.map(convert, [sys.argv[i] for i in range(1, len(sys.argv))])
+
+    for i in range(1, len(sys.argv)):
+        convert(sys.argv[i])
 
     end = time.time()
     print('Time taken: {}'.format(end-start))
