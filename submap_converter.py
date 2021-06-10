@@ -10,17 +10,18 @@ import csv
 
 FEATURE_DIM = 32
 
-def writeBin(file, data):
-    parent_dir = os.path.join(file.split('/')[-2], 'lms_front/')
+def writeBin(file, data, count):
+    parent_dir = file.split('/')[-2]
     filename = os.path.basename(file).split('.')[0] + '_3dfeatnet.bin'
     outdir = os.path.join('data_output/', parent_dir)
 
     try:
-        os.mkdir(outdir)
+        os.makedirs(outdir)
     except:
         pass
 
-    outfile = os.path.join(outdir, filename)
+    # outfile = os.path.join(outdir, filename)
+    outfile = os.path.join(outdir, str(count) + '.bin')
 
     data.tofile(outfile)
     # np.savetxt(outfile, data, delimiter=',')
@@ -138,7 +139,7 @@ def createINS(file, vals):
     outfile = os.path.join(outdir, 'ins.csv')
 
     try:
-        os.mkdir(outdir)
+        os.makedirs(outdir)
     except:
         pass
 
@@ -162,15 +163,32 @@ def createTimestamp(file, timestamp):
         out.write(' 1')
         out.write('\n')
 
-def createMetadata(file, data):
+def createMetadata(file, vals, count):
     parent_dir = file.split('/')[-2]
     outdir = os.path.join('data_output/', parent_dir)
     outfile = os.path.join(outdir, 'metadata.txt')
 
-    with open(outfile, 'w') as out:
-        pass
+    header = 'Idx\tDataset\tStartIdx\tEndIdx\tNumPts\tX\tY\tZ\n'
+    data = '{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
+                count,
+                parent_dir,
+                '', '',
+                vals[17],
+                vals[10],
+                vals[11],
+                vals[12]
+            )
 
-def convert(file):
+    file_exists = os.path.isfile(outfile)
+
+    with open(outfile, 'w') as out:
+        if not file_exists:
+            out.write(header)
+
+        out.write(data)
+
+def convert(args):
+    file, count = args
     points = []
     vals = []
 
@@ -194,28 +212,28 @@ def convert(file):
             for _ in range(numPoints):
                 points.append(list(np.fromfile(f, dtype=np.dtype('f4,f4,f4'), count=1)[0]))
                 _ = np.fromfile(f, dtype=np.dtype('f4,f4,f4,u1,u1,u1,i8'), count=1)
+            
+        points = np.array(points)
+        normals = np.zeros_like(points)
+        # normals = computeNorms(points)
 
-            createMetadata(file, data)
-        # points = np.array(points)
-        # normals = np.zeros_like(points)
-        # # normals = computeNorms(points)
+        data = np.block([points, normals])
+        data = np.float32(data)
 
-        # data = np.block([points, normals])
-        # data = np.float32(data)
+        writeBin(file, data, count)
+        createMetadata(file, vals, count)
 
-        # writeBin(file, data)
-
-        # print('Succesfully converted {}'.format(file))
+        print('Succesfully converted {}'.format(file))
 
 if __name__ == '__main__':
     numCores = mp.cpu_count()
     start = time.time()
 
-    # with Pool(numCores) as p:
-    #     p.map(convert, [sys.argv[i] for i in range(1, len(sys.argv))])
+    with Pool(numCores) as p:
+        p.map(convert, [(sys.argv[i], i) for i in range(1, len(sys.argv))])
 
-    for i in range(1, len(sys.argv)):
-        convert(sys.argv[i])
+    # for i in range(1, len(sys.argv)):
+    #     convert(sys.argv[i])
 
     end = time.time()
     print('Time taken: {}'.format(end-start))

@@ -23,7 +23,7 @@ parser.add_argument('--gpu', type=int, default=0,
 # data
 parser.add_argument('--data_dim', type=int, default=6,
                     help='Input dimension for data. Note: Feat3D-Net will only use the first 3 dimensions (default: 6)')
-parser.add_argument('--data_dir', type=str, default='../data/oxford',
+parser.add_argument('--data_dir', type=str, default='data/oxford',
                     help='Path to dataset. Should contain "train" and "clusters" folders')
 # Model
 parser.add_argument('--model', type=str, default='3DFeatNet', help='Model to load')

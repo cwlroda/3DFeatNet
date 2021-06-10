@@ -1,6 +1,6 @@
 #/bin/bash
 
-DATASET_DIR=../data/oxford
+DATASET_DIR=data/oxford
 LOG_DIR=./ckpt
 GPU_ID=0
 

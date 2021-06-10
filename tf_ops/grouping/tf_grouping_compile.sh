@@ -8,4 +8,4 @@ g++ -std=c++11 tf_grouping.cpp tf_grouping_g.cu.o -o tf_grouping_so.so -shared -
   -I ${TF_INC} \
   -I ${TF_INC}/external/nsync/public \
   -I /usr/local/cuda-11.3/include -lcudart -L /usr/local/cuda-11.3/lib64/ \
-  -L${TF_LIB} -O2 -D_GLIBCXX_USE_CXX11_ABI=0
+  -L${TF_LIB} -ltensorflow_framework -O2 -D_GLIBCXX_USE_CXX11_ABI=0

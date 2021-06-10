@@ -2,12 +2,13 @@ import logging
 import numpy as np
 import random
 import os
+import sys
 from collections import deque
 
 
 class DataGenerator(object):
 
-    def __init__(self, filename, num_cols=6):
+    def __init__(self, filename='', num_cols=6):
         """ Constructor to data generator
 
         Args:
@@ -16,10 +17,10 @@ class DataGenerator(object):
 
         self.logger = logging.getLogger(self.__class__.__name__)
 
-        self.dataset_folder = os.path.split(filename)[0]
+        # self.dataset_folder = os.path.split(filename)[0]
         self.paths_and_labels = []
-        self.load_metadata(filename)
-        self.logger.info('Loaded metadata file')
+        # self.load_metadata(filename)
+        # self.logger.info('Loaded metadata file')
 
         self.num_cols = num_cols
         self.size = len(self.paths_and_labels)  # Number of data instances
@@ -173,8 +174,14 @@ class DataGenerator(object):
         if path.endswith('bin'):
             model = np.fromfile(path, dtype=np.float32)
             model = np.reshape(model, (-1, num_cols))
+            print(model)
 
         else:
             model = np.loadtxt(path, dtype=np.float32, delimiter=',')
 
         return model
+
+
+if __name__ == '__main__':
+    data = DataGenerator()
+    data.load_point_cloud(sys.argv[1])
