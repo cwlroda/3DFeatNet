@@ -15,7 +15,7 @@
 clear
 DST_FOLDER = '../../data/oxford/train';  % Should be the same as in oxford_build_pointsclouds.m
 
-POSITIVE_THRESH = 5;  % positive sets must be less than 5m away
+POSITIVE_THRESH = 11;  % positive sets must be less than 5m away
 NEGATIVE_THRESH = 50  ;  % negative sets must be more than 50m away
 
 % Train/test split

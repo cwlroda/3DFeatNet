@@ -12,7 +12,7 @@ FEATURE_DIM = 32
 
 def writeBin(file, data, count):
     parent_dir = file.split('/')[-2]
-    filename = os.path.basename(file).split('.')[0] + '_3dfeatnet.bin'
+    # filename = os.path.basename(file).split('.')[0] + '_3dfeatnet.bin'
     outdir = os.path.join('data_output/', parent_dir)
 
     try:
@@ -169,7 +169,7 @@ def createMetadata(file, vals, count):
     outfile = os.path.join(outdir, 'metadata.txt')
 
     header = 'Idx\tDataset\tStartIdx\tEndIdx\tNumPts\tX\tY\tZ\n'
-    data = '{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n'.format(
+    data = '{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}'.format(
                 count,
                 parent_dir,
                 '', '',
@@ -181,11 +181,12 @@ def createMetadata(file, vals, count):
 
     file_exists = os.path.isfile(outfile)
 
-    with open(outfile, 'w') as out:
+    with open(outfile, 'a') as out:
         if not file_exists:
             out.write(header)
 
         out.write(data)
+        out.write('\n')
 
 def convert(args):
     file, count = args
