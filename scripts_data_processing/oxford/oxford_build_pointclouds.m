@@ -1,5 +1,5 @@
 % Accumulates the LMS_Front line scans of the Oxford Robotcar dataset.
-% 
+%
 % Outputs:
 %   Each trajectory is output to an individual folder, where each .bin file
 %   corresponds to a 3D accumulated point cloud. Each point cloud is
@@ -7,7 +7,7 @@
 %   Each output folder also contains a metadata.txt, which indicates the
 %   position of each point.
 %
-% Note: 
+% Note:
 % - The generated point clouds are positioned w.r.t. ORIGIN_POSE
 %
 % Author:
@@ -42,17 +42,16 @@ parfor (d = 1 : length(datasets), M)
     if ~exist(fullfile(FOLDER, datasets{d}), 'dir')
         continue
     end
-    
+
     metadataPath = fullfile(DST_FOLDER, datasets{d}, 'metadata.txt');
     if ~exist(metadataPath, 'file') || isempty(readtable(metadataPath))
         nClouds = BuildPointclouds(fullfile(FOLDER, datasets{d}), DST_FOLDER, ORIGIN_POSE);
-        
+
         totalClouds = totalClouds + nClouds;
         % fprintf('Total: %i clouds generated', totalClouds);
     else
         % Skip datasets already created
         fprintf('Skipping %s\n', datasets{d})
-    end    
-    
-end
+    end
 
+end

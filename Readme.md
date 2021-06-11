@@ -10,11 +10,11 @@ This work is based on our ECCV2018 paper. 3DFeat-Net is an approach for learning
 Bibtex:
 
 ```
-@inproceedings{yew2018-3dfeatnet, 
-    title={3DFeat-Net: Weakly Supervised Local 3D Features for Point Cloud Registration}, 
-    author={Yew, Zi Jian and Lee, Gim Hee}, 
+@inproceedings{yew2018-3dfeatnet,
+    title={3DFeat-Net: Weakly Supervised Local 3D Features for Point Cloud Registration},
+    author={Yew, Zi Jian and Lee, Gim Hee},
     booktitle={ECCV},
-    year={2018} 
+    year={2018}
 }
 ```
 
@@ -22,10 +22,10 @@ Bibtex:
 
 Our code is developed and tested on the following environment:
 
-* Python 3.5
-* Tensorflow 1.4 (with Cuda 8.0)
-* Numpy 1.13.3
-* Scikit-learn 0.19.1
+* Python ~~3.5~~ <b>3.6.9</b>
+* Tensorflow ~~1.4~~ <b>1.15.0</b> (with Cuda ~~8.0~~ <b>10.0</b>)
+* Numpy ~~1.13.3~~ <b>1.19.5</b>
+* Scikit-learn ~~0.19.1~~ <b>0.24.2</b>
 
 We also use MATLAB scripts for evaluation and processing of data.
 
@@ -35,7 +35,7 @@ The network model is in `models/feat3dnet.py`.
 
 ### Prerequisites
 
-Before using the model, you first need to compile the customized tf_ops in the folder `tf_ops` (we use the customized grouping and sampling ops from [PointNet++](https://github.com/charlesq34/pointnet2)). 
+Before using the model, you first need to compile the customized tf_ops in the folder `tf_ops` (we use the customized grouping and sampling ops from [PointNet++](https://github.com/charlesq34/pointnet2)).
 
 Check and execute `tf_xxx_compile.sh` under each subfolder. Update the python and nvcc file if necessary. The scripts has been updated for TF1.4, so if you're using TF version < 1.4, refer to the original script provided with PointNet++ for compilation.
 
