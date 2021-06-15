@@ -113,12 +113,18 @@ def feature_detection_module(xyz, points, num_clusters, radius, is_training, mlp
     new_xyz = sample_points(xyz, num_clusters)  # Sample point centers
     new_points, idx = query_and_group_points(xyz, points, new_xyz, num_samples, radius, knn=False, use_xyz=True,
                                              normalize_radius=True, orientations=None)  # Extract clusters
+    compute_gradients = True
+    last_layer = 0
 
     # Pre pooling MLP
     for i, num_out_channel in enumerate(mlp):
         new_points = conv2d(new_points, num_out_channel, kernel_size=[1, 1], stride=[1, 1], padding='VALID',
                             bn=use_bn, is_training=is_training,
                             scope='conv%d' % (i), reuse=False, )
+
+        if compute_gradients:
+            end_points['gradients']['det']['mlp_{}'.format(last_layer)] = tf.gradients(new_points, xyz, new_points)
+            last_layer += 1
 
     # Max Pool
     new_points = tf.reduce_max(new_points, axis=[2], keep_dims=True)
@@ -367,4 +373,3 @@ class Feat3dNet:
         train_op = optimizer.minimize(loss_op, global_step=global_step,
                                       var_list=var_list)
         return train_op
-
