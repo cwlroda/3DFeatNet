@@ -129,6 +129,8 @@ def compute_descriptors():
             pointclouds = pointcloud[None, :, :]
             num_models = pointclouds.shape[0]
 
+            print(end_points['gradients']['det']['mlp_4'])
+
             anchor_grad = sess.run([end_points['gradients']['det']['mlp_4']], feed_dict={
                 cloud_pl: pointclouds,
                 is_training: False
@@ -326,5 +328,8 @@ if __name__ == '__main__':
     os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
     gpu_string = '/gpu:{}'.format(args.gpu)
 
-    with tf.device(gpu_string):
+    tf.debugging.set_log_device_placement(True)
+
+    # with tf.device(gpu_string):
+    with tf.device('/CPU:0'):
         compute_descriptors()
