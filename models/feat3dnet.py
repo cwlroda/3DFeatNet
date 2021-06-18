@@ -110,6 +110,9 @@ def feature_detection_module(xyz, points, num_clusters, radius, is_training, mlp
 
     """
     end_points = {}
+    end_points['gradients'] = {}
+    end_points['gradients']['det'] = {}
+
     new_xyz = sample_points(xyz, num_clusters)  # Sample point centers
     new_points, idx = query_and_group_points(xyz, points, new_xyz, num_samples, radius, knn=False, use_xyz=True,
                                              normalize_radius=True, orientations=None)  # Extract clusters
@@ -136,6 +139,10 @@ def feature_detection_module(xyz, points, num_clusters, radius, is_training, mlp
                             padding='VALID', stride=[1, 1],
                             bn=use_bn, is_training=is_training,
                             scope='conv_post_%d' % (i))
+
+        if compute_det_gradients:
+            end_points['gradients']['det']['mlp_{}'.format(last_layer)] = tf.gradients(new_points, xyz, new_points)
+            last_layer += 1
 
     # Attention and orientation regression
     attention = conv2d(new_points, 1, [1, 1], stride=[1, 1], padding='VALID',
