@@ -87,7 +87,7 @@ def pointnet_sa_module(xyz, points, npoint, radius, nsample, mlp, mlp2, mlp3, is
         return new_xyz, new_points, idx, end_points
 
 
-def feature_detection_module(xyz, points, num_clusters, radius, is_training, mlp, mlp2, num_samples=64, use_bn=True):
+def feature_detection_module(xyz, points, num_clusters, radius, is_training, mlp, mlp2, num_samples=64, use_bn=True, compute_det_gradients=True):
     """ Detect features in point cloud
 
     Args:
@@ -113,7 +113,7 @@ def feature_detection_module(xyz, points, num_clusters, radius, is_training, mlp
     new_xyz = sample_points(xyz, num_clusters)  # Sample point centers
     new_points, idx = query_and_group_points(xyz, points, new_xyz, num_samples, radius, knn=False, use_xyz=True,
                                              normalize_radius=True, orientations=None)  # Extract clusters
-    compute_gradients = True
+
     last_layer = 0
 
     # Pre pooling MLP
@@ -122,7 +122,7 @@ def feature_detection_module(xyz, points, num_clusters, radius, is_training, mlp
                             bn=use_bn, is_training=is_training,
                             scope='conv%d' % (i), reuse=False, )
 
-        if compute_gradients:
+        if compute_det_gradients:
             end_points['gradients']['det']['mlp_{}'.format(last_layer)] = tf.gradients(new_points, xyz, new_points)
             last_layer += 1
 
@@ -255,7 +255,7 @@ class Feat3dNet:
 
         return xyz, features, anchor_attention, end_points
 
-    def get_inference_model(self, point_cloud, is_training, use_bn=True):
+    def get_inference_model(self, point_cloud, is_training, use_bn=True, compute_det_gradients=True):
         """ Constructs the core 3DFeat-Net model.
 
         Args:
@@ -281,7 +281,7 @@ class Feat3dNet:
                 feature_detection_module(l0_xyz, l0_points, num_clusters, self.param['BaseScale'],
                                          is_training,
                                          mlp, mlp2, num_samples=self.param['num_samples'],
-                                         use_bn=use_bn)
+                                         use_bn=use_bn, compute_det_gradients=compute_det_gradients)
 
         end_points.update(end_points_temp)
         end_points['keypoints'] = keypoints
