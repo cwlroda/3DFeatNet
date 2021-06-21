@@ -1,7 +1,6 @@
 '''
 Restores a trained 3DFeat-Net model and uses it to extract keypoints + descriptors on all point clouds in the
 input folder
-
 Author: Zi Jian Yew <zijian.yew@comp.nus.edu.sg>
 '''
 
@@ -72,9 +71,6 @@ def compute_descriptors():
     logger.info('Computed descriptors will be saved to %s', args.output_dir)
     os.makedirs(args.output_dir, exist_ok=True)
 
-    keypoint_choices = [4,8,16,32,64,128,256,512]
-    # keypoint_choices = [128]
-
     # Data
     binFiles = [f for f in os.listdir(args.data_dir) if f.endswith('.bin')]
     data_dim = args.data_dim
@@ -91,20 +87,11 @@ def compute_descriptors():
     cloud_pl, _, _ = model.get_placeholders(data_dim)
 
     # Ops1
-    xyz_op, features_op, attention_op, end_points = model.get_inference_model(cloud_pl, is_training, use_bn=USE_BN,
-                                                                              compute_det_gradients=True)
-
-    for k in keypoint_choices:
-        keypoint_choice_dir = os.path.join(args.output_dir, str(k))
-
-        if not os.path.exists(keypoint_choice_dir):
-            os.makedirs(keypoint_choice_dir)
+    xyz_op, features_op, attention_op, end_points = model.get_inference_model(cloud_pl, is_training, use_bn=USE_BN)
 
     with tf.Session(config=config) as sess:
 
         initialize_model(sess, args.checkpoint)
-
-        # tf.get_default_graph().finalize()
 
         num_processed = 0
 
@@ -113,7 +100,6 @@ def compute_descriptors():
 
             binFile = binFiles[iBin]
             fname_no_ext = binFile[:-4]
-
             pointcloud = DataGenerator.load_point_cloud(os.path.join(args.data_dir, binFile), num_cols=data_dim)
 
             if args.randomize_points:
@@ -129,110 +115,66 @@ def compute_descriptors():
             pointclouds = pointcloud[None, :, :]
             num_models = pointclouds.shape[0]
 
-            anchor_grad = sess.run([end_points['gradients']['det']['mlp_4']], feed_dict={
-                cloud_pl: pointclouds,
-                is_training: False
-            })[0][0]
+            if args.use_keypoints_from is None:
+                # Detect features
 
-            # print("Gradient shape: {}".format(np.shape(anchor_grad)))
-            xyz = pointclouds[:, :, :3]
+                # Compute attention in batches due to limited memory
+                xyz, attention = [], []
+                for startPt in range(0, pointcloud.shape[0], MAX_POINTS):
+                    endPt = min(pointcloud.shape[0], startPt + MAX_POINTS)
+                    xyz_subset = pointclouds[:, startPt:endPt, :3]
 
-            # detect keypoints
-            sphere_core = np.median(xyz, axis=1, keepdims=True)
+                    # Compute attention over all points
+                    xyz_cur, attention_cur = \
+                        sess.run([xyz_op, attention_op],
+                                 feed_dict={cloud_pl: pointclouds, is_training: False,
+                                            end_points['keypoints']: xyz_subset})
 
-            # print("sphere core shape: {}".format(np.shape(sphere_core)))
+                    xyz.append(xyz_cur)
+                    attention.append(attention_cur)
 
-            sphere_r = np.sqrt(np.sum(np.square(xyz - sphere_core), axis=2))  ## BxN
-            # print("sphere r shape: {}".format(np.shape(sphere_r)))
+                xyz = np.concatenate(xyz, axis=1)
+                attention = np.concatenate(attention, axis=1)
 
-            sphere_axis = xyz - sphere_core  ## BxNx3
+                # # Uncomment to save out attention to file
+                # with open(os.path.join(args.output_dir, '{}_attention.bin'.format(fname_no_ext)), 'wb') as f:
+                #     if args.num_points > 0:
+                #         xyz_attention = np.concatenate((xyz[0, :, :],
+                #                                         np.expand_dims(attention[0, :], 1),), axis=1)
+                #     else:
+                #         xyz_attention = np.concatenate((xyz[0, inv_permutation, :],
+                #                                         np.expand_dims(attention[0, inv_permutation], 1),), axis=1)
+                #     xyz_attention.tofile(f)
 
-            # print("sphere axis shape: {}".format(np.shape(sphere_axis)))
+                # Non maximal suppression to select keypoints based on attention
+                xyz_nms, attention_nms, num_keypoints = nms(xyz, attention)
 
-            if args.drop_neg:
-                sphere_map = np.multiply(np.sum(np.multiply(anchor_grad, sphere_axis), axis=2),
-                                         np.power(sphere_r, args.power))
             else:
-                sphere_map = -np.multiply(np.sum(np.multiply(anchor_grad, sphere_axis), axis=2),
-                                          np.power(sphere_r, args.power))
+                # Load keypoints from file
+                xyz_nms = []
+                for i in range(num_models):
+                    kp_fname = os.path.join(args.use_keypoints_from, '{}_kp.bin'.format(fname_no_ext))
+                    xyz_nms.append(DataGenerator.load_point_cloud(kp_fname, num_cols=3))
 
-            # print("sphere map shape: {}".format(np.shape(sphere_map)))
+                # Pad to make same size
+                num_keypoints = [kp.shape[0] for kp in xyz_nms]
+                largest_kp_count = max(num_keypoints)
+                for i in range(num_models):
+                    num_to_pad = largest_kp_count-xyz_nms[i].shape[0]
+                    to_pad_with = np.repeat(xyz_nms[i][0,:][None, :], num_to_pad, axis=0)
+                    xyz_nms[i] = np.concatenate((xyz_nms[i], to_pad_with), axis=0)
+                xyz_nms = np.stack(xyz_nms, axis=0)
 
-            for k in keypoint_choices:
-                keypoint_choice_dir = os.path.join(args.output_dir, str(k))
-                drop_indice = np.argpartition(sphere_map, kth=sphere_map.shape[1] - k, axis=1)[:, -k:]
+            # Compute features
+            xyz, features = \
+                sess.run([xyz_op, features_op],
+                         feed_dict={cloud_pl: pointclouds, is_training: False, end_points['keypoints']: xyz_nms})
 
-                # print("points as keypoints: {}".format(anchors[:, drop_indice, :3]))
-                # print("indices: {}".format(drop_indice))
-                #
-                # print("Point {}: {}".format(drop_indice[0, 0], anchors[:, drop_indice[0, 0], :3]))
-
-                xyz_kp = xyz[:, drop_indice, :3][0]
-                # print("Keypoints shape: {}".format(np.shape(xyz_kp)))
-                # Save out the output
-                with open(os.path.join(keypoint_choice_dir, '{}_kp.bin'.format(fname_no_ext)), 'wb') as f:
-                    xyz_kp[0, :, :3].tofile(f)
-
-            # if args.use_keypoints_from is None:
-            #     # Detect features
-
-            #     # Compute attention in batches due to limited memory
-            #     xyz, attention = [], []
-            #     for startPt in range(0, pointcloud.shape[0], MAX_POINTS):
-            #         endPt = min(pointcloud.shape[0], startPt + MAX_POINTS)
-            #         xyz_subset = pointclouds[:, startPt:endPt, :3]
-
-            #         # Compute attention over all points
-            #         xyz_cur, attention_cur = \
-            #             sess.run([xyz_op, attention_op],
-            #                      feed_dict={cloud_pl: pointclouds, is_training: False,
-            #                                 end_points['keypoints']: xyz_subset})
-
-            #         xyz.append(xyz_cur)
-            #         attention.append(attention_cur)
-
-            #     xyz = np.concatenate(xyz, axis=1)
-            #     attention = np.concatenate(attention, axis=1)
-
-            #     # # Uncomment to save out attention to file
-            #     # with open(os.path.join(args.output_dir, '{}_attention.bin'.format(fname_no_ext)), 'wb') as f:
-            #     #     if args.num_points > 0:
-            #     #         xyz_attention = np.concatenate((xyz[0, :, :],
-            #     #                                         np.expand_dims(attention[0, :], 1),), axis=1)
-            #     #     else:
-            #     #         xyz_attention = np.concatenate((xyz[0, inv_permutation, :],
-            #     #                                         np.expand_dims(attention[0, inv_permutation], 1),), axis=1)
-            #     #     xyz_attention.tofile(f)
-
-            #     # Non maximal suppression to select keypoints based on attention
-            #     xyz_nms, attention_nms, num_keypoints = nms(xyz, attention)
-
-            # else:
-            #     # Load keypoints from file
-            #     xyz_nms = []
-            #     for i in range(num_models):
-            #         kp_fname = os.path.join(args.use_keypoints_from, '{}_kp.bin'.format(fname_no_ext))
-            #         xyz_nms.append(DataGenerator.load_point_cloud(kp_fname, num_cols=3))
-
-            #     # Pad to make same size
-            #     num_keypoints = [kp.shape[0] for kp in xyz_nms]
-            #     largest_kp_count = max(num_keypoints)
-            #     for i in range(num_models):
-            #         num_to_pad = largest_kp_count-xyz_nms[i].shape[0]
-            #         to_pad_with = np.repeat(xyz_nms[i][0,:][None, :], num_to_pad, axis=0)
-            #         xyz_nms[i] = np.concatenate((xyz_nms[i], to_pad_with), axis=0)
-            #     xyz_nms = np.stack(xyz_nms, axis=0)
-
-            # # Compute features
-            # xyz, features = \
-            #     sess.run([xyz_op, features_op],
-            #              feed_dict={cloud_pl: pointclouds, is_training: False, end_points['keypoints']: xyz_nms})
-
-            # # Save out the output
-            # with open(os.path.join(args.output_dir, '{}.bin'.format(fname_no_ext)), 'wb') as f:
-            #     xyz_features = np.concatenate([xyz[0, 0:num_keypoints[0], :], features[0, 0:num_keypoints[0], :]],
-            #                                   axis=1)
-            #     xyz_features.tofile(f)
+            # Save out the output
+            with open(os.path.join(args.output_dir, '{}.bin'.format(fname_no_ext)), 'wb') as f:
+                xyz_features = np.concatenate([xyz[0, 0:num_keypoints[0], :], features[0, 0:num_keypoints[0], :]],
+                                              axis=1)
+                xyz_features.tofile(f)
 
             num_processed += 1
             logger.info('Processed %i / %i images', num_processed, len(binFiles))
