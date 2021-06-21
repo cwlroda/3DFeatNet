@@ -57,6 +57,10 @@ parser.add_argument('--checkpoint', type=str, default=CKPT_PATH,
                     help='Checkpoint to restore from (optional)')
 parser.add_argument('--output_dir', type=str,
                     help='Directory to save results to')
+parser.add_argument('--drop_neg', type=bool, default=True,
+                    help='')
+parser.add_argument('--power', type=int, default=1,
+                    help='')
 args = parser.parse_args()
 
 # Create Logging
@@ -128,6 +132,8 @@ def compute_descriptors():
 
             pointclouds = pointcloud[None, :, :]
             num_models = pointclouds.shape[0]
+
+            print(end_points['gradients']['det']['mlp_4'])
 
             anchor_grad = sess.run([end_points['gradients']['det']['mlp_4']], feed_dict={
                 cloud_pl: pointclouds,
@@ -326,5 +332,8 @@ if __name__ == '__main__':
     os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
     gpu_string = '/gpu:{}'.format(args.gpu)
 
-    with tf.device(gpu_string):
+    tf.debugging.set_log_device_placement(True)
+
+    # with tf.device(gpu_string):
+    with tf.device('/CPU:0'):
         compute_descriptors()
