@@ -23,7 +23,7 @@ Bibtex:
 Our code is developed and tested on the following environment:
 
 * Python ~~3.5~~ <b>3.6.9</b>
-* Tensorflow ~~1.4~~ <b>1.15.0</b> (with Cuda ~~8.0~~ <b>10.0</b>)
+* Tensorflow ~~1.4~~ <b>1.14.0</b> (with Cuda ~~8.0~~ <b>10.0</b>)
 * Numpy ~~1.13.3~~ <b>1.19.5</b>
 * Scikit-learn ~~0.19.1~~ <b>0.24.2</b>
 
