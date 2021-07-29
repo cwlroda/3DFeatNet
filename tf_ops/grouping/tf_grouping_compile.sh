@@ -19,4 +19,6 @@ g++ -std=c++11 tf_grouping.cpp tf_grouping_g.cu.o -o tf_grouping_so.so -shared -
   -I ${TF_INC} \
   -I ${TF_INC}/external/nsync/public \
   -I /usr/local/cuda-${NVCC_VER}/include -lcudart -L /usr/local/cuda-${NVCC_VER}/lib64/ \
-  -L${TF_LIB} -l:libtensorflow_framework.so.${TF_VER} -O2 -D_GLIBCXX_USE_CXX11_ABI=1
+  -L${TF_LIB} -l:libtensorflow_framework.so.${TF_VER} -O2 -D_GLIBCXX_USE_CXX11_ABI=0
+
+# Toggle USE_CXX11_ABI to 0 if there are include errors.
