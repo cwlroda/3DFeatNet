@@ -1,10 +1,10 @@
 #/bin/bash
 
-# Obtain cuda version (assume that nvcc has been added to path)
-set -e
-NVCC_VER=`nvcc --version`
-NVCC_VER=`echo $NVCC_VER | cut -d "_" -f 7`
-NVCC_VER="${NVCC_VER:0:4}"  # Highly hardcoded
+# Call this script from an outside compile wrapper.
+
+NVCC_VER=$1
+TF_VER=$2
+CXX_ABI_FLAG=$3
 
 /usr/local/cuda-${NVCC_VER}/bin/nvcc tf_grouping_g.cu -o tf_grouping_g.cu.o -c -O2 -DGOOGLE_CUDA=1 -x cu -Xcompiler -fPIC
 
@@ -15,4 +15,6 @@ g++ -std=c++11 tf_grouping.cpp tf_grouping_g.cu.o -o tf_grouping_so.so -shared -
   -I ${TF_INC} \
   -I ${TF_INC}/external/nsync/public \
   -I /usr/local/cuda-${NVCC_VER}/include -lcudart -L /usr/local/cuda-${NVCC_VER}/lib64/ \
-  -L${TF_LIB} -l:libtensorflow_framework.so.2 -O2 -D_GLIBCXX_USE_CXX11_ABI=0
+  -L${TF_LIB} -l:libtensorflow_framework.so.${TF_VER} -O2 -D_GLIBCXX_USE_CXX11_ABI=${CXX_ABI_FLAG}
+
+# Toggle USE_CXX11_ABI to 0 if there are include errors.

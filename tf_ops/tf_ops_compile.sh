@@ -16,7 +16,9 @@ then CXX_ABI_FLAG=1
 else CXX_ABI_FLAG=0
 fi
 
-# echo ${NVCC_VER}, ${TF_VER}, $CXX_ABI_FLAG
+echo ${NVCC_VER}, ${TF_VER}, $CXX_ABI_FLAG
+python -c "x=input('Waiting for your next move...')"
+
 cd grouping
 bash tf_grouping_compile.sh ${NVCC_VER} ${TF_VER} $CXX_ABI_FLAG
 
