@@ -209,6 +209,7 @@ def initialize_model(sess, checkpoint, ignore_missing_vars=False, restore_exclud
         else:
             var_list = [m for m in model_var_list if m not in exclude_list]
 
+        print('Var list: {}'.format(var_list))
         saver = tf.train.Saver(var_list)
 
         saver.restore(sess, checkpoint)
