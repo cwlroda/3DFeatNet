@@ -70,10 +70,10 @@ def knn_point(k, xyz1, xyz2):
         val: (batch_size, npoint, k) float32 array, L2 distances
         idx: (batch_size, npoint, k) int32 array, indices to input points
     '''
-    b = xyz1.get_shape()[0].value
-    n = xyz1.get_shape()[1].value
-    c = xyz1.get_shape()[2].value
-    m = xyz2.get_shape()[1].value
+    b = xyz1.get_shape()[0]
+    n = xyz1.get_shape()[1]
+    c = xyz1.get_shape()[2]
+    m = xyz2.get_shape()[1]
     print(b, n, c, m)
     print(xyz1, (b,1,n,c))
     xyz1 = tf.tile(tf.reshape(xyz1, (b,1,n,c)), [1,m,1,1])

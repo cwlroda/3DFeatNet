@@ -148,7 +148,7 @@ def sample_and_group_all(xyz, points, use_xyz=True):
         Equivalent to sample_and_group with npoint=1, radius=inf, use (0,0,0) as the centroid
     '''
     batch_size = tf.shape(xyz)[0]
-    nsample = xyz.get_shape()[1].value
+    nsample = xyz.get_shape()[1]
 
     new_xyz = tf.zeros((batch_size, 1, 3), tf.float32)  # (batch_size, 1, 3)
     idx = tf.constant(np.tile(np.array(range(nsample)).reshape((1, 1, nsample)), (2, 1, 1)))

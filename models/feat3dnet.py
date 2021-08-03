@@ -42,7 +42,7 @@ def pointnet_sa_module(xyz, points, npoint, radius, nsample, mlp, mlp2, mlp3, is
 
     with tf.variable_scope(scope) as sc:
         if npoint is None:
-            nsample = xyz.get_shape()[1].value
+            nsample = xyz.get_shape()[1] # Tf2 var indexing
             new_xyz, new_points, idx, grouped_xyz = sample_and_group_all(xyz, points, use_xyz)
         else:
             new_xyz, new_points, idx, grouped_xyz, end_points = sample_and_group(npoint, radius, nsample, xyz, points, tnet_spec,

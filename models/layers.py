@@ -5,7 +5,7 @@ Modified by Zi Jian to add pairwise_dist computation layer
 '''
 
 import tensorflow as tf
-import tensorflow.contrib.slim as slim
+import tf_slim as slim  # tensorflow.contrib.slim is deprecated.
 
 
 def conv2d(inputs, num_outputs, kernel_size, stride=[1, 1], padding='SAME',
@@ -148,7 +148,7 @@ def fully_connected(inputs,
       Variable tensor of size B x num_outputs.
     """
     with tf.variable_scope(scope) as sc:
-        num_input_units = inputs.get_shape()[-1].value
+        num_input_units = inputs.get_shape()[-1]
         weights = _variable_with_weight_decay('weights',
                                               shape=[num_input_units, num_outputs],
                                               use_xavier=use_xavier,
@@ -242,7 +242,7 @@ def batch_norm_template(inputs, is_training, scope, moments_dims, bn_decay):
     #                                    is_training=is_training, decay=bn_decay,updates_collections=None,
     #                                    scope=scope)
     with tf.variable_scope(scope) as sc:
-        num_channels = inputs.get_shape()[-1].value
+        num_channels = inputs.get_shape()[-1]
         beta = tf.Variable(tf.constant(0.0, shape=[num_channels]),
                            name='beta', trainable=True)
         gamma = tf.Variable(tf.constant(1.0, shape=[num_channels]),
