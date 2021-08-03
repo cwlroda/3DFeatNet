@@ -83,7 +83,7 @@ def compute_descriptors():
     model = get_network(args.model)(param)
 
     # placeholders
-    is_training = tf.placeholder(tf.bool)
+    is_training = tf.placeholder(tf.bool, name="is_training")
     cloud_pl, _, _ = model.get_placeholders(data_dim)
 
     # Ops1

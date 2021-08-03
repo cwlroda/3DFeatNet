@@ -112,11 +112,12 @@ def train():
              'margin': args.margin, 'num_clusters': NUM_CLUSTERS, 'num_samples': args.num_samples,
              'feature_dim': args.feature_dim, 'freeze_scopes': None,
              }
-    model = get_network(args.model)(param)
+    model = get_network(args.model)(param)  # by right, loads in the 3DFeatNet model
+    # Placeholders are deprecated, so we change to use other stuff instead.
 
     # placeholders
     global_step = tf.Variable(0, dtype=tf.int64, trainable=False, name='global_step')
-    is_training = tf.placeholder(tf.bool)
+    is_training = tf.placeholder(tf.bool, name='is_training')
     anchor_pl, positive_pl, negative_pl = model.get_placeholders(args.data_dim)
 
     # Ops
@@ -125,11 +126,16 @@ def train():
     train_op = model.get_train_op(loss_op, global_step=global_step)
 
     # Saver and summary writers
-    saver = tf.train.Saver(max_to_keep=5, keep_checkpoint_every_n_hours=0.5)
+    # This could be removed and changed to a function callback.
+    saver = tf.compat.v1.train.Saver(max_to_keep=5, keep_checkpoint_every_n_hours=0.5)
     train_writer, test_writer = get_summary_writers(args.log_dir)
     summary_op = tf.summary.merge_all()
 
     logger.info('Training Batch size: %i, validation batch size: %i', BATCH_SIZE, VAL_BATCH_SIZE)
+
+    # Migrate this to a separate function that removes usage of Sessions and Placeholders.
+
+
 
     with tf.Session(config=config) as sess:
 
@@ -205,11 +211,13 @@ def initialize_model(sess, checkpoint, ignore_missing_vars=False, restore_exclud
 
         logger.info('Restoring model from {}'.format(checkpoint))
 
-        model_var_list = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
+        # Get a list of all variables in the checkpoint.
+        model_var_list = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES)
+
         exclude_list = []
         if restore_exclude is not None:
             for e in restore_exclude:
-                exclude_list += tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=e)
+                exclude_list += tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES, scope=e)
         for e in exclude_list:
             logger.info('Excluded from model restore: %s', e.op.name)
 
@@ -225,9 +233,9 @@ def initialize_model(sess, checkpoint, ignore_missing_vars=False, restore_exclud
         else:
             var_list = [m for m in model_var_list if m not in exclude_list]
 
-        saver = tf.train.Saver(var_list)
+        saver = tf.compat.v1.train.Saver(var_list)
 
-        saver.restore(sess, checkpoint)
+        saver.restore(sess, checkpoint) # Restores variables from saved session.
 
     logger.info('Weights initialized')
 
@@ -317,7 +325,7 @@ def validate(sess, end_points, is_training, val_folder, val_groundtruths, data_d
 
 if __name__ == '__main__':
 
-    config = tf.ConfigProto()
+    config = tf.compat.v1.ConfigProto()
     config.allow_soft_placement = True
     os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
 

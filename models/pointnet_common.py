@@ -13,7 +13,6 @@ from tf_ops.sampling.tf_sampling import farthest_point_sample, gather_point
 
 def sample_points(xyz, npoint):
     '''
-
     :param xyz:
     :param npoint:
     :param knn:

@@ -40,9 +40,12 @@ def pointnet_sa_module(xyz, points, npoint, radius, nsample, mlp, mlp2, mlp3, is
 
     """
 
+    # Remove the usage of tf scopes
+
+
     with tf.variable_scope(scope) as sc:
         if npoint is None:
-            nsample = xyz.get_shape()[1] # Tf2 var indexing
+            nsample = xyz.get_shape()[1] # Number of samples
             new_xyz, new_points, idx, grouped_xyz = sample_and_group_all(xyz, points, use_xyz)
         else:
             new_xyz, new_points, idx, grouped_xyz, end_points = sample_and_group(npoint, radius, nsample, xyz, points, tnet_spec,
@@ -226,9 +229,9 @@ class Feat3dNet:
             (anchor_pl, positive_pl, negative_pl)
 
         """
-        anchor_pl = tf.placeholder(tf.float32, shape=(None, None, data_dim))  # type: tf.Tensor
-        positive_pl = tf.placeholder(tf.float32, shape=(None, None, data_dim))  # type: tf.Tensor
-        negative_pl = tf.placeholder(tf.float32, shape=(None, None, data_dim))   # type: tf.Tensor
+        anchor_pl = tf.placeholder(tf.float32, shape=(None, None, data_dim), name="anchor_pl")  # type: tf.Tensor
+        positive_pl = tf.placeholder(tf.float32, shape=(None, None, data_dim), name="positive_pl")  # type: tf.Tensor
+        negative_pl = tf.placeholder(tf.float32, shape=(None, None, data_dim), name="negative_pl")   # type: tf.Tensor
         return anchor_pl, positive_pl, negative_pl
 
     def get_train_model(self, anchors, positives, negatives, is_training, use_bn=True):
