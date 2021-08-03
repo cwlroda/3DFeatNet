@@ -121,3 +121,7 @@ scripts_evaluation/results_*/
 
 # Submap data
 *.bin
+
+# Compressed files
+*.tar.xz
+*.tar.gz
