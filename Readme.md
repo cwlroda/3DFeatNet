@@ -1,6 +1,5 @@
 # 3DFeat-Net: Weakly Supervised Local 3D Features for Point Cloud Registration
 
-
 ![pic-network](docs/pic-network.png)
 
 ## About
@@ -20,14 +19,16 @@ Bibtex:
 
 ## Environment
 
-Our code is developed and tested on the following environment:
+This version of the code is developed and tested on the following environment:
 
-* Python ~~3.5~~ <b>3.6.9</b>
-* Tensorflow ~~1.4~~ <b>1.15.0</b> (with Cuda ~~8.0~~ <b>10.0</b>)
+* Python ~~3.5~~ <b>3.7.11</b>
+* Tensorflow ~~1.4~~ <b>2.5.0</b> (with Cuda ~~8.0~~ <b>11.1</b>)
 * Numpy ~~1.13.3~~ <b>1.19.5</b>
 * Scikit-learn ~~0.19.1~~ <b>0.24.2</b>
 
 We also use MATLAB scripts for evaluation and processing of data.
+
+To install, create a new `conda` environment, and install the `requirements_tf2.txt` using **pip**. Attempting to install via `conda` will not work, for some reason.
 
 ## Network
 
@@ -37,7 +38,8 @@ The network model is in `models/feat3dnet.py`.
 
 Before using the model, you first need to compile the customized tf_ops in the folder `tf_ops` (we use the customized grouping and sampling ops from [PointNet++](https://github.com/charlesq34/pointnet2)).
 
-Check and execute `tf_xxx_compile.sh` under each subfolder. Update the python and nvcc file if necessary. The scripts has been updated for TF1.4, so if you're using TF version < 1.4, refer to the original script provided with PointNet++ for compilation.
+`cd` to `tf_ops` and run `bash tf_ops_compile.sh`. If `nvcc` is not added to path, so do first.
+~~Check and execute `tf_xxx_compile.sh` under each subfolder. Update the python and nvcc file if necessary. The scripts has been updated for TF1.4, so if you're using TF version < 1.4, refer to the original script provided with PointNet++ for compilation.~~
 
 ### Training
 
