@@ -43,7 +43,7 @@ def pointnet_sa_module(xyz, points, npoint, radius, nsample, mlp, mlp2, mlp3, is
     # Remove the usage of tf scopes
 
 
-    with tf.variable_scope(scope) as sc:
+    with tf.compat.v1.variable_scope(scope) as sc:
         if npoint is None:
             nsample = xyz.get_shape()[1] # Number of samples
             new_xyz, new_points, idx, grouped_xyz = sample_and_group_all(xyz, points, use_xyz)
@@ -229,9 +229,9 @@ class Feat3dNet:
             (anchor_pl, positive_pl, negative_pl)
 
         """
-        anchor_pl = tf.placeholder(tf.float32, shape=(None, None, data_dim), name="anchor_pl")  # type: tf.Tensor
-        positive_pl = tf.placeholder(tf.float32, shape=(None, None, data_dim), name="positive_pl")  # type: tf.Tensor
-        negative_pl = tf.placeholder(tf.float32, shape=(None, None, data_dim), name="negative_pl")   # type: tf.Tensor
+        anchor_pl = tf.compat.v1.placeholder(tf.float32, shape=(None, None, data_dim), name="anchor_pl")  # type: tf.Tensor
+        positive_pl = tf.compat.v1.placeholder(tf.float32, shape=(None, None, data_dim), name="positive_pl")  # type: tf.Tensor
+        negative_pl = tf.compat.v1.placeholder(tf.float32, shape=(None, None, data_dim), name="negative_pl")   # type: tf.Tensor
         return anchor_pl, positive_pl, negative_pl
 
     def get_train_model(self, anchors, positives, negatives, is_training, use_bn=True):
@@ -259,9 +259,9 @@ class Feat3dNet:
         end_points['output_features'] = features
         end_points.update(endpoints_temp)
 
-        xyz = tf.split(xyz, 3, axis=0)
-        features = tf.split(features, 3, axis=0)
-        anchor_attention = tf.split(attention, 3, axis=0)[0] if attention is not None else None
+        xyz = tf.split(xyz, 3, axis=0, name="xyz")
+        features = tf.split(features, 3, axis=0, name="features")
+        anchor_attention = tf.split(attention, 3, axis=0, name="anchor_attention")[0] if attention is not None else None
 
         return xyz, features, anchor_attention, end_points
 
@@ -284,7 +284,7 @@ class Feat3dNet:
 
         # Detection: Sample many clusters and computer attention weights and orientations
         num_clusters = self.param['num_clusters']
-        with tf.variable_scope("detection") as sc:
+        with tf.compat.v1.variable_scope("detection") as sc:
             mlp = [64, 128, 256]
             mlp2 = [128, 64]
             keypoints, idx, attention, orientation, end_points_temp = \
@@ -311,7 +311,7 @@ class Feat3dNet:
         mlp3 = [self.param['feature_dim']]
 
         self.logger.info('Descriptor MLP sizes: {} | {} | {}'.format(mlp, mlp2, mlp3))
-        with tf.variable_scope("description", reuse=tf.AUTO_REUSE) as sc:
+        with tf.compat.v1.variable_scope("description", reuse=tf.AUTO_REUSE) as sc:
             xyz, features, endpoints_temp = feature_extraction_module(l0_xyz, l0_points, is_training, mlp, mlp2, mlp3,
                                                                       keypoints=keypoints,
                                                                       orientations=keypoint_orientation,
@@ -338,13 +338,13 @@ class Feat3dNet:
         anchors, positives, negatives = features
 
         # Computes for each feature of the anchor, the distance to the nearest feature in the positive and negative
-        with tf.variable_scope("alignment") as sc:
+        with tf.compat.v1.variable_scope("alignment") as sc:
             positive_dist = pairwise_dist(anchors, positives)
             negative_dist = pairwise_dist(anchors, negatives)
             best_positive = tf.reduce_min(positive_dist, axis=2)
             best_negative = tf.reduce_min(negative_dist, axis=2)
 
-        with tf.variable_scope("triplet_loss") as sc:
+        with tf.compat.v1.variable_scope("triplet_loss") as sc:
             if not self.param['Attention']:
                 sum_positive = tf.reduce_mean(best_positive, 1)
                 sum_negative = tf.reduce_mean(best_negative, 1)

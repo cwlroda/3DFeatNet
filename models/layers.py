@@ -27,7 +27,7 @@ def conv2d(inputs, num_outputs, kernel_size, stride=[1, 1], padding='SAME',
     Returns:
       Variable tensor
     """
-    with tf.variable_scope(scope) as sc:
+    with tf.compat.v1.variable_scope(scope) as sc:
 
         net = slim.conv2d(inputs, num_outputs, kernel_size,
                           stride=stride, padding=padding,
@@ -121,7 +121,7 @@ def dropout(inputs,
     Returns:
       tensor variable
     """
-    with tf.variable_scope(scope) as sc:
+    with tf.compat.v1.variable_scope(scope) as sc:
         outputs = tf.cond(is_training,
                           lambda: tf.nn.dropout(inputs, keep_prob, noise_shape),
                           lambda: inputs)
@@ -147,7 +147,7 @@ def fully_connected(inputs,
     Returns:
       Variable tensor of size B x num_outputs.
     """
-    with tf.variable_scope(scope) as sc:
+    with tf.compat.v1.variable_scope(scope) as sc:
         num_input_units = inputs.get_shape()[-1]
         weights = _variable_with_weight_decay('weights',
                                               shape=[num_input_units, num_outputs],
@@ -241,7 +241,7 @@ def batch_norm_template(inputs, is_training, scope, moments_dims, bn_decay):
     #                                    center=True, scale=True,
     #                                    is_training=is_training, decay=bn_decay,updates_collections=None,
     #                                    scope=scope)
-    with tf.variable_scope(scope) as sc:
+    with tf.compat.v1.variable_scope(scope) as sc:
         num_channels = inputs.get_shape()[-1]
         beta = tf.Variable(tf.constant(0.0, shape=[num_channels]),
                            name='beta', trainable=True)
@@ -253,7 +253,7 @@ def batch_norm_template(inputs, is_training, scope, moments_dims, bn_decay):
         # Operator that maintains moving averages of variables.
         # Need to set reuse=False, otherwise if reuse, will see moments_1/mean/ExponentialMovingAverage/ does not exist
         # https://github.com/shekkizh/WassersteinGAN.tensorflow/issues/3
-        with tf.variable_scope(tf.get_variable_scope(), reuse=False):
+        with tf.compat.v1.variable_scope(tf.get_variable_scope(), reuse=False):
             ema_apply_op = tf.cond(is_training,
                                    lambda: ema.apply([batch_mean, batch_var]),
                                    lambda: tf.no_op())

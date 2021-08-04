@@ -117,7 +117,7 @@ def train():
 
     # placeholders
     global_step = tf.Variable(0, dtype=tf.int64, trainable=False, name='global_step')
-    is_training = tf.placeholder(tf.bool, name='is_training')
+    is_training = tf.compat.v1.placeholder(tf.bool, name='is_training')
     anchor_pl, positive_pl, negative_pl = model.get_placeholders(args.data_dim)
 
     # Ops
@@ -129,15 +129,13 @@ def train():
     # This could be removed and changed to a function callback.
     saver = tf.compat.v1.train.Saver(max_to_keep=5, keep_checkpoint_every_n_hours=0.5)
     train_writer, test_writer = get_summary_writers(args.log_dir)
-    summary_op = tf.summary.merge_all()
+    summary_op = tf.compat.v1.summary.merge_all()
 
     logger.info('Training Batch size: %i, validation batch size: %i', BATCH_SIZE, VAL_BATCH_SIZE)
 
     # Migrate this to a separate function that removes usage of Sessions and Placeholders.
 
-
-
-    with tf.Session(config=config) as sess:
+    with tf.compat.v1.Session(config=config) as sess:
 
         initialize_model(sess, args.checkpoint,
                          ignore_missing_vars=args.ignore_missing_vars,
@@ -177,7 +175,7 @@ def train():
                     # ---------------------------- TEST EVAL -----------------------
                     fp_rate = validate(sess, end_points, is_training, val_folder, val_groundtruths, args.data_dim)
 
-                    test_summary = tf.Summary(value=[
+                    test_summary = tf.compat.v1.summary.Summary(value=[
                         tf.Summary.Value(tag="fp_rate", simple_value=fp_rate),
                     ])
                     test_writer.add_summary(test_summary, step)
@@ -243,8 +241,8 @@ def initialize_model(sess, checkpoint, ignore_missing_vars=False, restore_exclud
 def get_summary_writers(log_dir):
 
     logger.info('Summaries will be stored in: %s', log_dir)
-    train_writer = tf.summary.FileWriter(os.path.join(log_dir, 'train'))
-    test_writer = tf.summary.FileWriter(os.path.join(log_dir, 'test'))
+    train_writer = tf.compat.v1.summary.FileWriter(os.path.join(log_dir, 'train'))
+    test_writer = tf.compat.v1.summary.FileWriter(os.path.join(log_dir, 'test'))
 
     return train_writer, test_writer
 
