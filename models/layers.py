@@ -72,7 +72,7 @@ def _variable_on_cpu(name, shape, initializer, use_fp16=False):
       Variable Tensor
     """
     dtype = tf.float16 if use_fp16 else tf.float32
-    var = tf.get_variable(name, shape, initializer=initializer, dtype=dtype)
+    var = tf.compat.v1.get_variable(name, shape, initializer=initializer, dtype=dtype)
     return var
 
 
@@ -94,13 +94,15 @@ def _variable_with_weight_decay(name, shape, stddev, wd, use_xavier=True):
       Variable Tensor
     """
     if use_xavier:
-        initializer = tf.contrib.layers.xavier_initializer()
+        initializer = tf.compat.v1.keras.initializers.glorot_normal()
     else:
-        initializer = tf.truncated_normal_initializer(stddev=stddev)
+        initializer = tf.compat.v1.truncated_normal_initializer(stddev=stddev)
+    
     var = _variable_on_cpu(name, shape, initializer)
+
     if wd is not None:
         weight_decay = tf.multiply(tf.nn.l2_loss(var), wd, name='weight_loss')
-        tf.add_to_collection('losses', weight_decay)
+        tf.compat.v1.add_to_collection('losses', weight_decay)
     return var
 
 
@@ -253,7 +255,7 @@ def batch_norm_template(inputs, is_training, scope, moments_dims, bn_decay):
         # Operator that maintains moving averages of variables.
         # Need to set reuse=False, otherwise if reuse, will see moments_1/mean/ExponentialMovingAverage/ does not exist
         # https://github.com/shekkizh/WassersteinGAN.tensorflow/issues/3
-        with tf.compat.v1.variable_scope(tf.get_variable_scope(), reuse=False):
+        with tf.compat.v1.variable_scope(tf.compat.v1.get_variable_scope(), reuse=False):
             ema_apply_op = tf.cond(is_training,
                                    lambda: ema.apply([batch_mean, batch_var]),
                                    lambda: tf.no_op())

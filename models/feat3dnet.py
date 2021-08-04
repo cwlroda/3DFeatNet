@@ -311,7 +311,7 @@ class Feat3dNet:
         mlp3 = [self.param['feature_dim']]
 
         self.logger.info('Descriptor MLP sizes: {} | {} | {}'.format(mlp, mlp2, mlp3))
-        with tf.compat.v1.variable_scope("description", reuse=tf.AUTO_REUSE) as sc:
+        with tf.compat.v1.variable_scope("description", reuse=tf.compat.v1.AUTO_REUSE) as sc:
             xyz, features, endpoints_temp = feature_extraction_module(l0_xyz, l0_points, is_training, mlp, mlp2, mlp3,
                                                                       keypoints=keypoints,
                                                                       orientations=keypoint_orientation,
@@ -370,14 +370,14 @@ class Feat3dNet:
         """ Gets training op
         """
 
-        optimizer = tf.train.AdamOptimizer(lr)
+        optimizer = tf.compat.v1.train.AdamOptimizer(lr)
 
-        var_list = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES)
+        var_list = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES)
 
         to_exclude = []
         if self.param['freeze_scopes'] is not None:
             for s in self.param['freeze_scopes']:
-                to_exclude += tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=s)
+                to_exclude += tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES, scope=s)
         var_list = [v for v in var_list if v not in to_exclude]
 
         train_op = optimizer.minimize(loss_op, global_step=global_step,
