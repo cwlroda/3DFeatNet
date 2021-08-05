@@ -9,9 +9,12 @@ TF_INC=$4
 TF_LIB=$5
 PROTO_INC=$6
 
+printf "\n=== Building Sampling ops using `nvcc --version`"
+printf "\n=== And g++ version `g++-7 --version`"
+
 /usr/local/cuda-${NVCC_VER}/bin/nvcc tf_grouping_g.cu -o tf_grouping_g.cu.o -c -O2 -DGOOGLE_CUDA=1 -x cu -Xcompiler -fPIC
 
-g++ -std=c++11 tf_grouping.cpp tf_grouping_g.cu.o -o tf_grouping_so.so -shared -fPIC \
+g++-7 -std=c++11 tf_grouping.cpp tf_grouping_g.cu.o -o tf_grouping_so.so -shared -fPIC \
   -I ${PROTO_INC} \
   -I ${TF_INC} \
   -I ${TF_INC}/external/nsync/public \
