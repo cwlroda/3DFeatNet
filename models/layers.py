@@ -115,7 +115,7 @@ def dropout(inputs,
 
     Args:
       inputs: tensor
-      is_training: boolean tf.Variable
+      is_training: boolean tf.compat.v1.Variable
       scope: string
       keep_prob: float in [0,1]
       noise_shape: list of ints
@@ -245,9 +245,9 @@ def batch_norm_template(inputs, is_training, scope, moments_dims, bn_decay):
     #                                    scope=scope)
     with tf.compat.v1.variable_scope(scope) as sc:
         num_channels = inputs.get_shape()[-1]
-        beta = tf.Variable(tf.constant(0.0, shape=[num_channels]),
+        beta = tf.compat.v1.Variable(tf.constant(0.0, shape=[num_channels]),
                            name='beta', trainable=True)
-        gamma = tf.Variable(tf.constant(1.0, shape=[num_channels]),
+        gamma = tf.compat.v1.Variable(tf.constant(1.0, shape=[num_channels]),
                             name='gamma', trainable=True)
         batch_mean, batch_var = tf.nn.moments(inputs, moments_dims, name='moments')
         decay = bn_decay if bn_decay is not None else 0.9

@@ -116,7 +116,7 @@ def train():
     # Placeholders are deprecated, so we change to use other stuff instead.
 
     # placeholders
-    global_step = tf.Variable(0, dtype=tf.int64, trainable=False, name='global_step')
+    global_step = tf.compat.v1.Variable(0, dtype=tf.int64, trainable=False, name='global_step')
     is_training = tf.compat.v1.placeholder(tf.bool, name='is_training')
     anchor_pl, positive_pl, negative_pl = model.get_placeholders(args.data_dim)
 
@@ -129,7 +129,7 @@ def train():
     # This could be removed and changed to a function callback.
     saver = tf.compat.v1.train.Saver(max_to_keep=5, keep_checkpoint_every_n_hours=0.5)
     train_writer, test_writer = get_summary_writers(args.log_dir)
-    summary_op = tf.compat.v1.summary.merge_all()
+    summary_op = tf.compat.v1.summary.merge_all(key=tf.compat.v1.GraphKeys.SUMMARIES)
 
     logger.info('Training Batch size: %i, validation batch size: %i', BATCH_SIZE, VAL_BATCH_SIZE)
 
@@ -148,6 +148,8 @@ def train():
 
             train_data.shuffle()
 
+            train_its = 0
+
             # Training data
             while True:
                 anchors, positives, negatives = train_data.next_triplet(k=BATCH_SIZE,
@@ -155,6 +157,15 @@ def train():
                                                                         augmentation=train_augmentations)
                 if anchors is None or anchors.shape[0] != BATCH_SIZE:
                     break
+
+                feed_list = [xyz_op, features_op, loss_op, global_step, summary_op, end_points, train_op]
+                for i, item in enumerate(feed_list):
+                    print("### Currently on train_it {}.".format(train_its))
+                    if item is None:
+                        print("###! Item index {} is None.".format(i))
+                        exit(1)
+                    else:
+                        train_its += 1
 
                 xyz, features, train_loss, step, summary, ep, _ = \
                     sess.run([xyz_op, features_op, loss_op, global_step, summary_op, end_points, train_op],
@@ -175,8 +186,8 @@ def train():
                     # ---------------------------- TEST EVAL -----------------------
                     fp_rate = validate(sess, end_points, is_training, val_folder, val_groundtruths, args.data_dim)
 
-                    test_summary = tf.compat.v1.summary.Summary(value=[
-                        tf.Summary.Value(tag="fp_rate", simple_value=fp_rate),
+                    test_summary = tf.compat.v1.Summary(value=[
+                        tf.compat.v1.Summary.Value(tag="fp_rate", simple_value=fp_rate),
                     ])
                     test_writer.add_summary(test_summary, step)
                     logger.info('Step %i. FP Rate: %f', step, fp_rate)
