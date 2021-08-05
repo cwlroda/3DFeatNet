@@ -124,3 +124,4 @@ scripts_evaluation/results_*/
 
 # Datasets
 data/oxford/*
+data/oxford
