@@ -57,7 +57,7 @@ def pairwise_dist(A, B):
 
     A = tf.expand_dims(A, 2)
     B = tf.expand_dims(B, 1)
-    dist = tf.reduce_sum(tf.squared_difference(A, B), 3)
+    dist = tf.reduce_sum(tf.math.squared_difference(A, B), 3)
 
     return dist
 

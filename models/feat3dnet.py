@@ -60,7 +60,7 @@ def pointnet_sa_module(xyz, points, npoint, radius, nsample, mlp, mlp2, mlp3, is
                                 scope='conv%d' % (i), reuse=False, )
 
         # Max pool
-        pooled = tf.reduce_max(new_points, axis=[2], keep_dims=True)
+        pooled = tf.reduce_max(new_points, axis=[2], keepdims=True)
         pooled_expand = tf.tile(pooled, [1, 1, new_points.shape[2], 1])
 
         # Concatenate
@@ -75,7 +75,7 @@ def pointnet_sa_module(xyz, points, npoint, radius, nsample, mlp, mlp2, mlp3, is
                                 activation=tf.nn.relu if (final_relu or i < len(mlp2) - 1) else None)
 
         # Max pool again
-        new_points = tf.reduce_max(new_points, axis=[2], keep_dims=True)
+        new_points = tf.reduce_max(new_points, axis=[2], keepdims=True)
 
         if mlp3 is None:
             mlp3 = []
@@ -133,7 +133,7 @@ def feature_detection_module(xyz, points, num_clusters, radius, is_training, mlp
             last_layer += 1
 
     # Max Pool
-    new_points = tf.reduce_max(new_points, axis=[2], keep_dims=True)
+    new_points = tf.reduce_max(new_points, axis=[2], keepdims=True)
 
     # Max pooling MLP
     if mlp2 is None: mlp2 = []
@@ -155,7 +155,7 @@ def feature_detection_module(xyz, points, num_clusters, radius, is_training, mlp
     orientation_xy = conv2d(new_points, 2, [1, 1], stride=[1, 1], padding='VALID',
                             activation=None, bn=False, scope='orientation', reuse=False)
     orientation_xy = tf.squeeze(orientation_xy, axis=2)
-    orientation_xy = tf.nn.l2_normalize(orientation_xy, dim=2, epsilon=1e-8)
+    orientation_xy = tf.nn.l2_normalize(orientation_xy, axis=2, epsilon=1e-8)
     orientation = tf.atan2(orientation_xy[:, :, 1], orientation_xy[:, :, 0])
 
     return new_xyz, idx, attention, orientation, end_points
@@ -192,7 +192,7 @@ def feature_extraction_module(l0_xyz, l0_points, is_training, mlp, mlp2, mlp3,
                                                    final_relu=False)
 
     xyz = l1_xyz
-    features = tf.nn.l2_normalize(l1_points, dim=2, epsilon=1e-8)
+    features = tf.nn.l2_normalize(l1_points, axis=2, epsilon=1e-8)
 
     return xyz, features, end_points
 
