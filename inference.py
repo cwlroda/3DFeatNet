@@ -183,7 +183,7 @@ def compute_descriptors():
 def initialize_model(sess, checkpoint, ignore_missing_vars=False, restore_exclude=None):
     logger.info('Initializing weights')
 
-    sess.run(tf.global_variables_initializer())
+    sess.run(tf.compat.v1.global_variables_initializer())
 
     if checkpoint is not None:
 

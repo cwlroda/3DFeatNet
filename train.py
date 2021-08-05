@@ -200,7 +200,7 @@ def initialize_model(sess, checkpoint, ignore_missing_vars=False, restore_exclud
     """
     logger.info('Initializing weights')
 
-    sess.run(tf.global_variables_initializer())
+    sess.run(tf.compat.v1.global_variables_initializer())
 
     if checkpoint is not None:
 
@@ -320,8 +320,33 @@ def validate(sess, end_points, is_training, val_folder, val_groundtruths, data_d
 
     return fp_rate
 
+# local trace function which returns itself
+def my_tracer(frame, event, arg = None):
+    # extracts frame code
+    code = frame.f_code
+  
+    # extracts calling function name
+    func_name = code.co_name
+  
+    # extracts the line number
+    line_no = frame.f_lineno
+  
+    # extracts the file name
+    file_name = code.co_filename
+
+    print(f"A {event} encountered in \
+    {func_name}() at line number {line_no} \
+    in file {file_name}. \
+        ")
+  
+    return my_tracer
 
 if __name__ == '__main__':
+
+    import faulthandler
+    faulthandler.enable()
+
+    # sys.settrace(my_tracer)  # Root out segfaults
 
     config = tf.compat.v1.ConfigProto()
     config.allow_soft_placement = True
@@ -329,5 +354,9 @@ if __name__ == '__main__':
 
     gpu_string = '/gpu:{}'.format(args.gpu)
     config.gpu_options.allow_growth = True
+
+    # Disable eager execution for compatibility with the rest of the Tf1 code:
+    tf.compat.v1.disable_eager_execution()
+
     with tf.device(gpu_string):
         train()

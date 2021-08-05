@@ -121,3 +121,6 @@ scripts_evaluation/results_*/
 
 # Submap data
 *.bin
+
+# Datasets
+data/oxford/*

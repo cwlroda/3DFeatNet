@@ -4,8 +4,10 @@ DATASET_DIR=./data/oxford
 LOG_DIR=./ckpt
 GPU_ID=0
 
+set -e
+
 # Pretrain
-python train.py \
+python -Xfaulthandler train.py \
   --data_dir $DATASET_DIR \
   --log_dir $LOG_DIR/pretrain \
   --augmentation Jitter RotateSmall Shift \
@@ -14,7 +16,7 @@ python train.py \
   --gpu $GPU_ID
 
 # Second stage training: Performance should saturate in ~60 epochs
-python train.py \
+python -Xfaulthandler train.py \
   --data_dir $DATASET_DIR \
   --log_dir $LOG_DIR/secondstage \
   --checkpoint $LOG_DIR/pretrain/ckpt \
