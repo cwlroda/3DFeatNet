@@ -130,7 +130,7 @@ def train():
     train_writer, test_writer = get_summary_writers(args.log_dir)
     summary_op = tf.compat.v1.summary.merge_all(key=tf.compat.v1.GraphKeys.SUMMARIES)
     # tf.compat.v1.GraphKeys.
-    print("### Initially, summary_op is {}".format(summary_op)) # This is none initially, therefore it is a issue with initialization.
+    # print("### Initially, summary_op is {}".format(summary_op)) # This is none initially, therefore it is a issue with initialization.
 
     logger.info('Training Batch size: %i, validation batch size: %i', BATCH_SIZE, VAL_BATCH_SIZE)
 
@@ -149,7 +149,7 @@ def train():
 
             train_data.shuffle()
 
-            train_its = 0
+            # train_its = 0
 
             # Training data
             while True:
@@ -159,15 +159,15 @@ def train():
                 if anchors is None or anchors.shape[0] != BATCH_SIZE:
                     break
 
-                feed_list = [xyz_op, features_op, loss_op, global_step, summary_op, end_points, train_op]
-                for i, item in enumerate(feed_list):
-                    print("### Currently on train_it {}.".format(train_its))
-                    if item is None:
-                        print([thing for thing in feed_list])
-                        # print("###! Item index {} is None.".format(i))
-                        exit(1)
-                    else:
-                        train_its += 1
+                # feed_list = [xyz_op, features_op, loss_op, global_step, summary_op, end_points, train_op]
+                # for i, item in enumerate(feed_list):
+                #     print("### Currently on train_it {}.".format(train_its))
+                #     if item is None:
+                #         print([thing for thing in feed_list])
+                #         # print("###! Item index {} is None.".format(i))
+                #         exit(1)
+                #     else:
+                #         train_its += 1
 
                 xyz, features, train_loss, step, summary, ep, _ = \
                 sess.run([xyz_op, features_op, loss_op, global_step, summary_op, end_points, train_op],

@@ -15,9 +15,7 @@ fi
 
 NVCC_VER=`nvcc --version`
 NVCC_VER=`echo $NVCC_VER | cut -d "_" -f 7`
-NVCC_VER="${NVCC_VER:0:4}"  # Highly hardcoded
-# Duct tape for the system:
-# NVCC_VER="11.4"
+NVCC_VER="${NVCC_VER:0:4}"  # Adjust this if nvcc version is not ~11
 
 # set tensorflow version
 OUTPUT=($(python3 -c "import tensorflow as tf; out_list=[tf.sysconfig.get_include(), tf.sysconfig.get_lib(), tf.__version__]; print(out_list)" | tr -d '[],'))
