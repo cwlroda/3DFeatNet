@@ -353,7 +353,7 @@ class Feat3dNet:
                 sum_positive = tf.reduce_sum(attention_sm * best_positive, 1)
                 sum_negative = tf.reduce_sum(attention_sm * best_negative, 1)
 
-                tf.summary.histogram('normalized_attention', attention_sm)
+                tf.compat.v1.summary.histogram('normalized_attention', attention_sm)
                 end_points['normalized_attention'] = attention_sm
 
             end_points['sum_positive'] = sum_positive
@@ -362,7 +362,7 @@ class Feat3dNet:
 
             loss = tf.reduce_mean(triplet_cost)
 
-        tf.summary.scalar('loss', loss)
+        tf.compat.v1.summary.scalar('loss', loss)    # Force using the TF1 version of scalar summary
 
         return loss, end_points
 

@@ -112,8 +112,7 @@ def train():
              'margin': args.margin, 'num_clusters': NUM_CLUSTERS, 'num_samples': args.num_samples,
              'feature_dim': args.feature_dim, 'freeze_scopes': None,
              }
-    model = get_network(args.model)(param)  # by right, loads in the 3DFeatNet model
-    # Placeholders are deprecated, so we change to use other stuff instead.
+    model = get_network(args.model)(param)  # by right, loads in the 3DFeatNet object
 
     # placeholders
     global_step = tf.compat.v1.Variable(0, dtype=tf.int64, trainable=False, name='global_step')
@@ -130,6 +129,8 @@ def train():
     saver = tf.compat.v1.train.Saver(max_to_keep=5, keep_checkpoint_every_n_hours=0.5)
     train_writer, test_writer = get_summary_writers(args.log_dir)
     summary_op = tf.compat.v1.summary.merge_all(key=tf.compat.v1.GraphKeys.SUMMARIES)
+    # tf.compat.v1.GraphKeys.
+    print("### Initially, summary_op is {}".format(summary_op)) # This is none initially, therefore it is a issue with initialization.
 
     logger.info('Training Batch size: %i, validation batch size: %i', BATCH_SIZE, VAL_BATCH_SIZE)
 
@@ -162,15 +163,16 @@ def train():
                 for i, item in enumerate(feed_list):
                     print("### Currently on train_it {}.".format(train_its))
                     if item is None:
-                        print("###! Item index {} is None.".format(i))
+                        print([thing for thing in feed_list])
+                        # print("###! Item index {} is None.".format(i))
                         exit(1)
                     else:
                         train_its += 1
 
                 xyz, features, train_loss, step, summary, ep, _ = \
-                    sess.run([xyz_op, features_op, loss_op, global_step, summary_op, end_points, train_op],
-                             feed_dict={anchor_pl: anchors, positive_pl: positives, negative_pl: negatives,
-                                        is_training: True})
+                sess.run([xyz_op, features_op, loss_op, global_step, summary_op, end_points, train_op],
+                            feed_dict={anchor_pl: anchors, positive_pl: positives, negative_pl: negatives,
+                                    is_training: True})
 
                 if step % args.summary_every_n_steps == 0:
                     train_writer.add_summary(summary, step)

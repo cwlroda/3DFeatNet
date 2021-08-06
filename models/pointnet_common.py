@@ -37,7 +37,7 @@ def query_and_group_points(xyz, points, new_xyz, nsample, radius, knn=False,
     else:
         idx, pts_cnt = query_ball_point(radius, nsample, xyz, new_xyz)
 
-    tf.summary.histogram('pts_cnt', pts_cnt)
+    tf.compat.v1.summary.histogram('pts_cnt', pts_cnt)
 
     # Group XYZ coordinates
     grouped_xyz = group_point(xyz, idx)  # (batch_size, npoint, nsample, 3)
