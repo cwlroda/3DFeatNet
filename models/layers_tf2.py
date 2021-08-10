@@ -47,7 +47,7 @@ class MaxPoolConcat(tf.keras.layers.Layer):
     '''
     def __init__(self, axis:'list[int]'=[2]):
         super(MaxPoolConcat, self).__init__()
-        self.maxPoolAxis = maxPoolAxis(axis)
+        self.maxPoolAxis = MaxPoolAxis(axis)
 
     def call(self, input_pts):
         pooled = self.maxPoolAxis.call(input_pts)
