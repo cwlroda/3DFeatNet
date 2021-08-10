@@ -3,8 +3,8 @@ import tensorflow as tf
 
 from models.layers import conv2d
 from models.layers import pairwise_dist
-from models.pointnet_common import sample_points, sample_and_group, sample_and_group_all, query_and_group_points
-
+from models.pointnet_common  import sample_points, sample_and_group, \
+                sample_and_group_all, query_and_group_points
 
 def pointnet_sa_module(xyz, points, npoint, radius, nsample, mlp, mlp2, mlp3, is_training, scope, bn=True, bn_decay=None,
                        tnet_spec=None, knn=False, use_xyz=True,
