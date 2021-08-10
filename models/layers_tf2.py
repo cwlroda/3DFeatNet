@@ -9,63 +9,7 @@ Tf2 refactor attempt by TianYi
 import tensorflow as tf
 import tf_slim as slim  # tensorflow.contrib.slim is deprecated.
 
-
-def conv2d(inputs, num_outputs, kernel_size, stride=[1, 1], padding='SAME',
-           activation=tf.nn.relu, bn=True, bn_decay=None, is_training=None, scope=None, reuse=None):
-
-    with tf.compat.v1.variable_scope(scope) as sc:
-
-        net = slim.conv2d(inputs, num_outputs, kernel_size,
-                          stride=stride, padding=padding,
-                          activation_fn=None if bn else activation,  # Apply activation after batch norm
-                          weights_initializer=slim.variance_scaling_initializer(),
-                          reuse=reuse,
-                          scope='conv2d')
-
-        if bn:
-            # net = slim.batch_norm(net, scale=True, is_training=is_training, activation_fn=activation)
-            net = batch_norm_for_conv2d(net, is_training, bn_decay, scope='bn')
-
-            if activation is not None:
-                net = activation(net)
-
-        return net
-
-class conv2d(tf.keras.layers.Layer):
-    ''' 2D convolution with non-linear operation.
-
-    Args:
-      inputs: 4-D tensor variable BxHxWxC
-      num_outputs: int
-      kernel_size: a list of 2 ints
-      stride: a list of 2 ints
-      padding: 'SAME' or 'VALID'
-      activation_fn: function
-      bn: bool, whether to use batch norm
-      bn_decay: float or float tensor variable in [0,1]
-      is_training: bool Tensor variable
-      scope: string
-
-    Returns:
-      Var
-    '''
-    def __init__(self):
-        super(conv2d, self).__init__()
-
-    def build(self):
-        pass
-
-    def call(inputs, num_outputs, kernel_size, stride=[1, 1], padding='SAME',
-            activation=tf.nn.relu, bn=True, bn_decay=None, is_training=None, 
-            scope=None, reuse=None):
-        
-        _=0
-        # TODO understand the difference between conv2d from tf-slim and other implementations
-        tf.nn.conv2d( inputs, filters=_, strides = stride, padding = padding )
-
-        pass
-
-class pairwiseDist(tf.keras.layers.Layer):
+class PairwiseDist(tf.keras.layers.Layer):
     ''' Computes pairwise distance
 
     :param A: (B x N x D) containing descriptors of A
@@ -75,7 +19,7 @@ class pairwiseDist(tf.keras.layers.Layer):
     '''
 
     def __init__(self):
-        super(pairwiseDist, self).__init__()
+        super(PairwiseDist, self).__init__()
 
     def call(self, A, B):
         A = tf.expand_dims(A, 2)
@@ -83,6 +27,34 @@ class pairwiseDist(tf.keras.layers.Layer):
         dist = tf.reduce_sum(tf.math.squared_difference(A, B), 3)
 
         return dist
+
+class MaxPoolAxis(tf.keras.layers.Layer):
+    '''Computes custom max pooling operation on custom axis.
+    '''
+    def __init__(self, axis:'list[int]'=[2]):
+        super(MaxPoolAxis, self).__init__()
+        self.axis = axis
+
+    def call(self, input_pts):
+        pooled = tf.reduce_max(input_pts, axis=self.axis, keepdims=True)
+
+        return pooled
+
+class MaxPoolConcat(tf.keras.layers.Layer):
+    ''' Computes custom max pooling operation on custom axis,
+        and then applies expansion and concatenation.
+        Inherits from maxPoolAxis.
+    '''
+    def __init__(self, axis:'list[int]'=[2]):
+        super(MaxPoolConcat, self).__init__()
+        self.maxPoolAxis = maxPoolAxis(axis)
+
+    def call(self, input_pts):
+        pooled = self.maxPoolAxis.call(input_pts)
+        pooled_expand = tf.tile(pooled, [1, 1, input_pts.shape[2], 1])
+        new_points = tf.concat((input_pts, pooled_expand), axis=3)
+
+        return new_points
 
 def _variable_on_cpu(name, shape, initializer, use_fp16=False):
     """Helper to create a Variable stored on CPU memory.
@@ -94,7 +66,8 @@ def _variable_on_cpu(name, shape, initializer, use_fp16=False):
       Variable Tensor
     """
     dtype = tf.float16 if use_fp16 else tf.float32
-    var = tf.compat.v1.get_variable(name, shape, initializer=initializer, dtype=dtype)
+    # var = tf.compat.v1.get_variable(name, shape, initializer=initializer, dtype=dtype)
+    var = tf.Variable(initial_value=initializer, name=name, shape=shape, dtype=dtype)
     return var
 
 
@@ -116,15 +89,17 @@ def _variable_with_weight_decay(name, shape, stddev, wd, use_xavier=True):
       Variable Tensor
     """
     if use_xavier:
-        initializer = tf.compat.v1.keras.initializers.glorot_normal()
+        # initializer = tf.compat.v1.keras.initializers.glorot_normal()
+        initializer = tf.keras.initializers.GlorotNormal()
     else:
-        initializer = tf.compat.v1.truncated_normal_initializer(stddev=stddev)
+        # initializer = tf.compat.v1.truncated_normal_initializer(stddev=stddev)
+        initializer = tf.keras.initializers.TruncatedNormal(stddev=stddev)
     
     var = _variable_on_cpu(name, shape, initializer)
 
     if wd is not None:
         weight_decay = tf.multiply(tf.nn.l2_loss(var), wd, name='weight_loss')
-        tf.compat.v1.add_to_collection('losses', weight_decay)
+        tf.compat.v1.add_to_collection('losses', weight_decay)   # This needs to be changed 
     return var
 
 

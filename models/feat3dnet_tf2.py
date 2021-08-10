@@ -7,7 +7,7 @@ from tensorflow.python.ops.nn_impl import moments
 from models.pointnet_common import sample_points, sample_and_group, sample_and_group_all, query_and_group_points
 from models.layers import conv2d
 from models.layers import pairwise_dist
-from models.layers_tf2 import PairwiseDist, maxPoolAxis, maxPoolConcat
+from models.layers_tf2 import PairwiseDist, MaxPoolAxis, MaxPoolConcat
 
 class PointnetSaModule(tf.Module):
     """ PointNet Set Abstraction (SA) Module. Modified to remove unneeded components (e.g. pooling),
@@ -59,7 +59,7 @@ class PointnetSaModule(tf.Module):
                 self.layers.append( tf.keras.layers.BatchNormalization( axis=-1, name="bn" ) )
 
         # Max pool, then concatenate
-        self.layers.append( maxPoolConcat() ) # Custom layer pooling only on one axis then tiling then concat
+        self.layers.append( MaxPoolConcat() ) # Custom layer pooling only on one axis then tiling then concat
 
         if mlp2 is not None:
             for i, num_out_channel in enumerate(mlp2):
@@ -72,7 +72,7 @@ class PointnetSaModule(tf.Module):
                     self.layers.append( tf.keras.layers.BatchNormalization( axis=-1, name="bn2" ) )
         
         # Max pool again
-        self.layers.append( maxPoolAxis() )
+        self.layers.append( MaxPoolAxis() )
 
         if mlp3 is not None:
             for i, num_out_channel in enumerate(mlp3):
