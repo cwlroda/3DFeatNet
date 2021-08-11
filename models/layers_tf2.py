@@ -10,7 +10,7 @@ import tensorflow as tf
 import tf_slim as slim  # tensorflow.contrib.slim is deprecated.
 
 # Uncomment this if a Layer is required, not an operation.
-'''
+"""
 class PairwiseDist(tf.keras.layers.Layer):
     ''' Computes pairwise distance
 
@@ -29,7 +29,7 @@ class PairwiseDist(tf.keras.layers.Layer):
         dist = tf.reduce_sum(tf.math.squared_difference(A, B), 3)
 
         return dist
-'''
+"""
 
 @tf.function
 def pairwise_dist(A: tf.Tensor, B: tf.Tensor) -> tf.Tensor:
