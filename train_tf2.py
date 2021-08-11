@@ -1,12 +1,18 @@
 import argparse
+from re import L
 import coloredlogs, logging
 import logging.config
 import numpy as np
 import os
 import sys
 import tensorflow as tf
+from tensorflow.python.keras import optimizers
+from tensorflow.python.ops.numpy_ops.np_math_ops import negative, positive
+from models import feat3dnet_tf2
 
-from models.net_factory import get_network
+# from models.net_factory import get_network
+from models.feat3dnet_tf2 import Feat3dNet
+
 from config import *
 from data.datagenerator import DataGenerator
 from data.augment import get_augmentations_from_list
@@ -17,12 +23,13 @@ UPRIGHT_AXIS = 2  # Will learn invariance along this axis
 VAL_PROPORTION = 1.0
 
 # Arguments
-parser = argparse.ArgumentParser(description='Trains pointnet')
+parser = argparse.ArgumentParser(description='Trains 3dFeatNet_tf2')
 parser.add_argument('--gpu', type=int, default=0,
                     help='GPU to use (default: 0)')
 # data
 parser.add_argument('--data_dim', type=int, default=6,
-                    help='Input dimension for data. Note: Feat3D-Net will only use the first 3 dimensions (default: 6)')
+                    help='Input dimension for data. Note: Feat3D-Net will only use the first 3 \
+                    dimensions (default: 6)')
 parser.add_argument('--data_dir', type=str, default='data/oxford',
                     help='Path to dataset. Should contain "train" and "clusters" folders')
 # Model
@@ -94,115 +101,192 @@ def train():
 
     log_arguments()
 
-    # Training Data
+    # init training data
     train_file = os.path.join(args.data_dir, 'train/train.txt')
     train_data = DataGenerator(train_file, num_cols=args.data_dim)
 
     logger.info('Loaded train data: %s (# instances: %i)',
                 train_file, train_data.size)
-
+    
     train_augmentations = get_augmentations_from_list(args.augmentation, upright_axis=UPRIGHT_AXIS)
-
-    # Validation data validation
-    val_folder = os.path.join(args.data_dir, 'clusters')
-    val_groundtruths = load_validation_groundtruths(os.path.join(val_folder, 'filenames.txt'), proportion=VAL_PROPORTION)
-
+    
     # Model
     param = {'NoRegress': args.noregress, 'BaseScale': args.base_scale, 'Attention': not args.noattention,
              'margin': args.margin, 'num_clusters': NUM_CLUSTERS, 'num_samples': args.num_samples,
              'feature_dim': args.feature_dim, 'freeze_scopes': None,
              }
-    model = get_network(args.model)(param)  # by right, loads in the 3DFeatNet object
 
-    # placeholders
-    global_step = tf.compat.v1.Variable(0, dtype=tf.int64, trainable=False, name='global_step')
-    is_training = tf.compat.v1.placeholder(tf.bool, name='is_training')
-    anchor_pl, positive_pl, negative_pl = model.get_placeholders(args.data_dim)
+    # Hardcode to get tf2 model
+    model = Feat3dNet(True, param=param)
+    model.compile(optimizer=tf.keras.optimizers.Adam(1e-5),
+                    loss=model.feat_3d_net_loss)    # Unsure what 'metrics' to apply here
 
-    # Ops
-    xyz_op, features_op, anchor_attention_op, end_points = model.get_train_model(anchor_pl, positive_pl, negative_pl, is_training, use_bn=USE_BN)
-    loss_op, end_points = model.get_loss(xyz_op, features_op, anchor_attention_op, end_points)
-    train_op = model.get_train_op(loss_op, global_step=global_step)
-
+    # init model
+    MODEL_SAVEPATH = os.path.join(checkpoint_dir, '3DFeatNet.save')
+    if os.path.isfile(MODEL_SAVEPATH):
+        model.load_weights(MODEL_SAVEPATH)
+        logger.info('Restored weights from %s' %MODEL_SAVEPATH)
+    
     # Saver and summary writers
     # This could be removed and changed to a function callback.
-    saver = tf.compat.v1.train.Saver(max_to_keep=5, keep_checkpoint_every_n_hours=0.5)
     train_writer, test_writer = get_summary_writers(args.log_dir)
-    summary_op = tf.compat.v1.summary.merge_all(key=tf.compat.v1.GraphKeys.SUMMARIES)
-    # tf.compat.v1.GraphKeys.
-    # print("### Initially, summary_op is {}".format(summary_op)) # This is none initially, therefore it is a issue with initialization.
+    train_writer.init()
+    test_writer.init()
 
     logger.info('Training Batch size: %i, validation batch size: %i', BATCH_SIZE, VAL_BATCH_SIZE)
 
-    # Migrate this to a separate function that removes usage of Sessions and Placeholders.
+    step = 0
+    for iEpoch in range(args.num_epochs):
+        logger.info('Starting epoch %d.' %iEpoch)
 
-    with tf.compat.v1.Session(config=config) as sess:
+        train_data.shuffle()
+        model.reset_metrics()
 
-        initialize_model(sess, args.checkpoint,
-                         ignore_missing_vars=args.ignore_missing_vars,
-                         restore_exclude=args.restore_exclude)
-        train_writer.add_graph(sess.graph)
+        # Training data
+        while True:
+            anchors, positives, negatives = train_data.next_triplet(k=BATCH_SIZE,
+                                                                    num_points=args.num_points,
+                                                                    augmentation=train_augmentations)
+            if anchors is None or anchors.shape[0] != BATCH_SIZE:
+                break
+            
+            # Training
+            result = model.train_on_batch([anchors, positives, negatives])
+            metrics_names = model.metrics_names
+            
+            logger.info("Train: ")
+            for i in range(len(metrics_names)):
+                logger.info("{}={}".format(metrics_names[i], result[i]))
 
-        for iEpoch in range(args.num_epochs):
+            # TODO Add summary saving
+            if step % args.summary_every_n_steps == 0:
+                with train_writer.as_default():
+                    # tf.summary.
+                    pass
+                
+            if step % args.checkpoint_every_n_steps == 0:
+                # TODO Add checkpoint saving
+                pass
 
-            logger.info('Starting epoch %i', iEpoch)
+            # # Run through validation data
+            if step % args.validate_every_n_steps == 0 or step == 1:
 
-            train_data.shuffle()
+                print()
+                # ---------------------------- TEST EVAL -----------------------
+                # TODO get point cloud
+                results = model.test_on_batch(point_cloud)
+                metrics_names = model.metrics_names
+                
+                logger.info("Test: ")
+                for i in range(len(metrics_names)):
+                    logger.info("{}={}".format(metrics_names[i], result[i]))
 
-            # train_its = 0
+                # TODO Add summary saving
 
-            # Training data
-            while True:
-                anchors, positives, negatives = train_data.next_triplet(k=BATCH_SIZE,
-                                                                        num_points=args.num_points,
-                                                                        augmentation=train_augmentations)
-                if anchors is None or anchors.shape[0] != BATCH_SIZE:
-                    break
+                # TODO Finish up validate
+                fp_rate = validate(sess, end_points, is_training, val_folder, val_groundtruths, args.data_dim)
 
-                # feed_list = [xyz_op, features_op, loss_op, global_step, summary_op, end_points, train_op]
-                # for i, item in enumerate(feed_list):
-                #     print("### Currently on train_it {}.".format(train_its))
-                #     if item is None:
-                #         print([thing for thing in feed_list])
-                #         # print("###! Item index {} is None.".format(i))
-                #         exit(1)
-                #     else:
-                #         train_its += 1
+                # TODO change this to Summary object
+                test_summary = tf.compat.v1.Summary(value=[
+                    tf.compat.v1.Summary.Value(tag="fp_rate", simple_value=fp_rate),
+                ])
+                test_writer.add_summary(test_summary, step)
+                logger.info('Step %i. FP Rate: %f', step, fp_rate)
+                # ---------------------------- TEST EVAL End -----------------------
 
-                xyz, features, train_loss, step, summary, ep, _ = \
-                sess.run([xyz_op, features_op, loss_op, global_step, summary_op, end_points, train_op],
-                            feed_dict={anchor_pl: anchors, positive_pl: positives, negative_pl: negatives,
-                                    is_training: True})
+                test_writer.flush()
+                train_writer.flush()
 
-                if step % args.summary_every_n_steps == 0:
-                    train_writer.add_summary(summary, step)
-                if step % args.checkpoint_every_n_steps == 0:
-                    saver.save(sess, os.path.join(checkpoint_dir, 'checkpoint.ckpt'), global_step=step)
-
-                sys.stdout.write('\rStep {}, Loss: {}'.format(step, train_loss))
-
-                # # Run through validation data
-                if step % args.validate_every_n_steps == 0 or step == 1:
-
-                    print()
-                    # ---------------------------- TEST EVAL -----------------------
-                    fp_rate = validate(sess, end_points, is_training, val_folder, val_groundtruths, args.data_dim)
-
-                    test_summary = tf.compat.v1.Summary(value=[
-                        tf.compat.v1.Summary.Value(tag="fp_rate", simple_value=fp_rate),
-                    ])
-                    test_writer.add_summary(test_summary, step)
-                    logger.info('Step %i. FP Rate: %f', step, fp_rate)
-                    # ---------------------------- TEST EVAL End -----------------------
-
-                    test_writer.flush()
-                    train_writer.flush()
-
+            step += 1
             print()
 
 
+
+
+def get_summary_writers(log_dir):
+
+    logger.info('Summaries will be stored in: %s', log_dir)
+    train_writer = tf.summary.create_file_writer(os.path.join(log_dir, 'train'))
+    test_writer = tf.summary.create_file_writer(os.path.join(log_dir, 'test'))
+
+    # train_writer = tf.compat.v1.summary.FileWriter(os.path.join(log_dir, 'train'))
+    # test_writer = tf.compat.v1.summary.FileWriter(os.path.join(log_dir, 'test'))
+
+    return train_writer, test_writer
+
+
+def load_validation_groundtruths(fname, proportion=1):
+    groundtruths = []
+    iGt = 0
+    with open(fname) as fid:
+        fid.readline()
+        for line in fid:
+            groundtruths.append((iGt, int(line.split()[-1])))
+            iGt += 1
+
+    if 0 < proportion < 1:
+        skip = int(1.0/proportion)
+        groundtruths = groundtruths[0::skip]
+
+    return groundtruths
+
+def validate(end_points, is_training, val_folder, val_groundtruths, data_dim):
+    
+    if val_groundtruths is None or len(val_groundtruths)==0:
+        return 1
+
+    positive_dist = []
+    negative_dist = []
+
+    for iTest in range(0, len(val_groundtruths), NUM_CLUSTERS):
+        
+        clouds1, clouds2 = [], []
+        # We batch the validation by stacking all the validation clusters into a single point cloud,
+        # while keeping them apart such that they do not overlap each other. This way NUM_CLUSTERS
+        # clusters can be computed in a single pass
+        for jTest in range(iTest, min(iTest + NUM_CLUSTERS, len(val_groundtruths))):
+            offset = (jTest - iTest) * 100
+            cluster_idx = val_groundtruths[jTest][0]
+
+            cloud1 = DataGenerator.load_point_cloud(
+                os.path.join(val_folder, '{}_0.bin'.format(cluster_idx)), data_dim)
+            cloud1[:, 0] += offset
+            clouds1.append(cloud1)
+
+            cloud2 = DataGenerator.load_point_cloud(
+                os.path.join(val_folder, '{}_1.bin'.format(cluster_idx)), data_dim)
+            cloud2[:, 0] += offset
+            clouds2.append(cloud2)
+
+        offsets = np.arange(0, NUM_CLUSTERS * 100, 100)
+        num_clusters = min(len(val_groundtruths) - iTest, NUM_CLUSTERS)
+        offsets[num_clusters:] = 0
+        offsets = np.pad(offsets[:, None], ((0, 0), (0, 2)), mode='constant', constant_values=0)[None, :, :]
+
+        clouds1 = np.concatenate(clouds1, axis=0)[None, :, :]
+        clouds2 = np.concatenate(clouds2, axis=0)[None, :, :]
+
+        xyz1, features1 = 0,0 # TODO Placeholder for an inference function!!!
+
+        xyz2, features2 = 0,0 # TODO Same as above.
+
+
+        d = np.sqrt(np.sum(np.square(np.squeeze(features1 - features2)), axis=1))
+        d = d[:num_clusters]
+
+        positive_dist += [d[i] for i in range(len(d)) if val_groundtruths[iTest + i][1] == 1]
+        negative_dist += [d[i] for i in range(len(d)) if val_groundtruths[iTest + i][1] == 0]
+
+    d_at_95_recall = np.percentile(positive_dist, 95)
+    num_FP = np.count_nonzero(np.array(negative_dist) < d_at_95_recall)
+    num_TN = len(negative_dist) - num_FP
+    fp_rate = num_FP / (num_FP + num_TN)
+
+    return fp_rate
+
+"""
 def initialize_model(sess, checkpoint, ignore_missing_vars=False, restore_exclude=None):
-    """ Initialize model weights
+    ''' Initialize model weights
 
     :param sess: tf.Session
     :param checkpoint: Checkpoint to load. Set to none if starting from scratch
@@ -210,7 +294,7 @@ def initialize_model(sess, checkpoint, ignore_missing_vars=False, restore_exclud
                                 in the checkpoint
     :param restore_exclude: Scopes to exclude from checkpoint
     :return:
-    """
+    '''
     logger.info('Initializing weights')
 
     sess.run(tf.compat.v1.global_variables_initializer())
@@ -234,7 +318,8 @@ def initialize_model(sess, checkpoint, ignore_missing_vars=False, restore_exclud
 
         if ignore_missing_vars:
             checkpoint_var_names = get_tensors_in_checkpoint_file(checkpoint)
-            missing = [m.op.name for m in model_var_list if m.op.name not in checkpoint_var_names and m not in exclude_list]
+            missing = \
+            [m.op.name for m in model_var_list if m.op.name not in checkpoint_var_names and m not in exclude_list]
 
             for m in missing:
                 logger.warning('Variable missing from checkpoint: %s', m)
@@ -249,33 +334,10 @@ def initialize_model(sess, checkpoint, ignore_missing_vars=False, restore_exclud
         saver.restore(sess, checkpoint) # Restores variables from saved session.
 
     logger.info('Weights initialized')
+"""
 
 
-def get_summary_writers(log_dir):
-
-    logger.info('Summaries will be stored in: %s', log_dir)
-    train_writer = tf.compat.v1.summary.FileWriter(os.path.join(log_dir, 'train'))
-    test_writer = tf.compat.v1.summary.FileWriter(os.path.join(log_dir, 'test'))
-
-    return train_writer, test_writer
-
-
-def load_validation_groundtruths(fname, proportion=1):
-    groundtruths = []
-    iGt = 0
-    with open(fname) as fid:
-        fid.readline()
-        for line in fid:
-            groundtruths.append((iGt, int(line.split()[-1])))
-            iGt += 1
-
-    if 0 < proportion < 1:
-        skip = int(1.0/proportion)
-        groundtruths = groundtruths[0::skip]
-
-    return groundtruths
-
-
+"""
 def validate(sess, end_points, is_training, val_folder, val_groundtruths, data_dim):
 
     if val_groundtruths is None or len(val_groundtruths) == 0:
@@ -332,34 +394,12 @@ def validate(sess, end_points, is_training, val_folder, val_groundtruths, data_d
     fp_rate = num_FP / (num_FP + num_TN)
 
     return fp_rate
-
-# local trace function which returns itself
-def my_tracer(frame, event, arg = None):
-    # extracts frame code
-    code = frame.f_code
-  
-    # extracts calling function name
-    func_name = code.co_name
-  
-    # extracts the line number
-    line_no = frame.f_lineno
-  
-    # extracts the file name
-    file_name = code.co_filename
-
-    print(f"A {event} encountered in \
-    {func_name}() at line number {line_no} \
-    in file {file_name}. \
-        ")
-  
-    return my_tracer
+"""
 
 if __name__ == '__main__':
 
     import faulthandler
     faulthandler.enable()
-
-    # sys.settrace(my_tracer)  # Root out segfaults
 
     config = tf.compat.v1.ConfigProto()
     config.allow_soft_placement = True
