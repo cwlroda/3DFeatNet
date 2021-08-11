@@ -423,15 +423,17 @@ class Feat3dNet(tf.keras.Model):
         else: 
             self.Network = Feat3dNetInference(det_mlps, ext_mlps, self.param, "Feat3dNet")
 
-    def __call__(self, inputs: 'dict', training=False):
+    def call(self, inputs: 'list[tf.keras.Input]', training=False):
         if self.train_or_infer:
-            anchors = inputs['anchors']
-            positives = inputs['positives']
-            negatives = inputs['negatives']
+            anchors, positives, negatives = inputs
+            # anchors = inputs['anchors']
+            # positives = inputs['positives']
+            # negatives = inputs['negatives']
 
             return self.Network(anchors, positives, negatives, training)
         else:
-            point_cloud = inputs['point_cloud']
+            point_cloud = inputs
+            # point_cloud = inputs['point_cloud']
 
             return self.Network(point_cloud, training)
 
