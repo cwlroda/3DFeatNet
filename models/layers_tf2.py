@@ -9,6 +9,8 @@ Tf2 refactor attempt by TianYi
 import tensorflow as tf
 import tf_slim as slim  # tensorflow.contrib.slim is deprecated.
 
+# Uncomment this if a Layer is required, not an operation.
+'''
 class PairwiseDist(tf.keras.layers.Layer):
     ''' Computes pairwise distance
 
@@ -27,6 +29,22 @@ class PairwiseDist(tf.keras.layers.Layer):
         dist = tf.reduce_sum(tf.math.squared_difference(A, B), 3)
 
         return dist
+'''
+
+@tf.function
+def pairwise_dist(A: tf.Tensor, B: tf.Tensor) -> tf.Tensor:
+    ''' Computes pairwise distance
+    :param A: (B x N x D) containing descriptors of A
+    :param B: (B x N x D) containing descriptors of B
+    :return: (B x N x N) tensor. Element[i,j,k] denotes the distance between the jth descriptor in ith model of A,
+             and kth descriptor in ith model of B
+    '''
+
+    A = tf.expand_dims(A, 2)
+    B = tf.expand_dims(B, 1)
+    dist = tf.reduce_sum(tf.math.squared_difference(A, B), 3)
+
+    return dist
 
 class MaxPoolAxis(tf.keras.layers.Layer):
     '''Computes custom max pooling operation on custom axis.
