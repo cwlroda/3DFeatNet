@@ -1,6 +1,8 @@
 import logging
 import tensorflow as tf
 from tensorflow._api.v2 import train
+from tensorflow.python.ops.gen_state_ops import assign_add_eager_fallback
+from tensorflow.python.ops.numpy_ops.np_math_ops import positive
 
 from models.pointnet_common import sample_points, sample_and_group, sample_and_group_all, query_and_group_points
 from models.layers_tf2 import pairwise_dist, MaxPoolAxis, MaxPoolConcat
@@ -66,8 +68,8 @@ class PointnetSaModule(tf.Module):
 
     @tf.Module.with_name_scope
     def __call__(self, xyz: tf.Tensor, points: tf.Tensor, npoint: int, radius: float, nsample,
-                    tnet_spec=None, knn=False, use_xyz=True, keypoints=None, orientations=None, 
-                    normalize_radius=True):
+                    is_training, tnet_spec=None, knn=False, use_xyz=True, 
+                    keypoints=None, orientations=None, normalize_radius=True):
         """
         Args:
             xyz (tf.Tensor): (batch_size, ndataset, 3) TF tensor
@@ -75,6 +77,7 @@ class PointnetSaModule(tf.Module):
             npoint (int32): #points sampled in farthest point sampling
             radius (float): search radius in local region
             nsample (int): Maximum points in each local region
+            is_training (bool): calling train or inference
             tnet_spec: Unused in Feat3D-Net. Set to None
             knn: Unused in Feat3D-Net. Set to False
             use_xyz: Unused in Feat3D-Net. Set to True
@@ -100,7 +103,7 @@ class PointnetSaModule(tf.Module):
                             normalize_radius=normalize_radius)
 
         for layer in self.layers:
-            self.new_points = layer(self.new_points)
+            self.new_points = layer(self.new_points, training=is_training)
 
         self.new_points = tf.squeeze(self.new_points, [2])
 
@@ -161,7 +164,7 @@ class FeatureDetectionModule(tf.Module):
                                                     name='orientation' )
     
     @tf.Module.with_name_scope
-    def __call__(self, xyz, points, num_clusters, radius, num_samples=64, compute_det_gradients=True):
+    def __call__(self, xyz, points, num_clusters, radius, is_training, num_samples=64, compute_det_gradients=True):
         """
         Args:
         xyz (tf.Tensor): Input point cloud of size (batch_size, ndataset, 3)
@@ -169,6 +172,8 @@ class FeatureDetectionModule(tf.Module):
         num_clusters (int): Number of clusters to extract. Set to -1 to use all points
         radius (float): Radius to consider for feature detection
         num_samples: Maximum number of points to consider per cluster
+        is_training (bool): train or inference
+        compute_det_gradients (bool): if gradients are meant to be calculated
 
         Returns:
         new_xyz: Cluster centers
@@ -184,7 +189,7 @@ class FeatureDetectionModule(tf.Module):
         last_layer = 0
 
         for layer in self.layers:
-            new_points = layer(new_points)
+            new_points = layer(new_points, training=is_training)
             
             if layer.name[:4] == "conv" and compute_det_gradients:
                 # TODO This might not work out of the box
@@ -222,16 +227,16 @@ class FeatureExtractionModule(PointnetSaModule):
     
     @tf.Module.with_name_scope
     def __call__(self, l0_xyz: tf.Tensor, l0_points: tf.Tensor, 
-                radius, num_samples, keypoints, orientations):
+                radius, num_samples, keypoints, orientations, is_training):
         '''
         Args:
         l0_xyz (tf.Tensor): Input point cloud of size (batch_size, ndataset, 3)
         l0_points (tf.Tensor): Point features. Unused in 3DFeat-Net
-        keypoints: Keypoints to compute features for
-        orientations: Orientation (from detector) to pre-rotate clusters before compute descriptors
         radius: Radius to consider for feature detection
         num_samples: Maximum points in each local region
-        use_bn: Whether to perform batch normalizaton
+        keypoints: Keypoints to compute features for
+        orientations: Orientation (from detector) to pre-rotate clusters before compute descriptors
+        is_training (bool): train or infer
 
         Returns:
         xyz, features, end_points
@@ -239,7 +244,7 @@ class FeatureExtractionModule(PointnetSaModule):
                 
         l1_xyz, l1_points, l1_idx, end_points = \
         super(FeatureExtractionModule, self).__call__(
-            l0_xyz, l0_points, 512, radius, num_samples, keypoints=keypoints,
+            l0_xyz, l0_points, 512, radius, num_samples, is_training, keypoints=keypoints,
             orientations=orientations, normalize_radius=True
         )
 
@@ -253,7 +258,7 @@ class Feat3dNetInference(tf.Module):
     Contains operations specific to the Inference model of 3DFeatNet.
     Refactored from `Feat3dNet.get_inference_model()`
     '''
-    def __init__(self, det_mlps: 'dict', ext_mlps: 'dict', params: 'dict', name, is_training, bn=True):
+    def __init__(self, det_mlps: 'dict', ext_mlps: 'dict', params: 'dict', name, bn=True):
         """ Constructs the core 3DFeat-Net model.
 
         Args:
@@ -261,7 +266,6 @@ class Feat3dNetInference(tf.Module):
             ext_mlps(dict< str, list<int> >): same as det_mlps
             params (dict): Passes in parameters from outside class for Detection and Extraction
             name (str)
-            is_training (bool): Set to true only if training, false otherwise
             bn (bool): Whether to perform batch normalization
 
         Returns:
@@ -282,10 +286,11 @@ class Feat3dNetInference(tf.Module):
         self._Attention = params['Attention']
     
     @tf.Module.with_name_scope
-    def __call__(self, point_cloud, compute_det_gradients=True):
+    def __call__(self, point_cloud, is_training, compute_det_gradients=True):
         '''
         Args:
             point_cloud (tf.Tensor): Input point clouds of size (batch_size, ndataset, 3).
+            is_training (bool): Training or Inference
             compute_det_gradients (bool): Whether to compute and output gradients for the the Detection stage.
 
         Returns:
@@ -298,7 +303,7 @@ class Feat3dNetInference(tf.Module):
 
         keypoints, idx, attention, orientation, end_points_temp = \
             self.Detection(l0_xyz, l0_points, self._num_clusters, self._radius, 
-                            self._num_samples, compute_det_gradients)
+                            is_training, self._num_samples, compute_det_gradients)
 
         end_points.update(end_points_temp)
         end_points['keypoints'] = keypoints
@@ -313,9 +318,8 @@ class Feat3dNetInference(tf.Module):
             attention = None
 
         xyz, features, endpoints_temp = \
-            self.Extraction(l0_xyz, l0_points, keypoints=keypoints,
-                                    orientations=keypoint_orientation,
-                                    radius=self.param['BaseScale'],
+            self.Extraction(l0_xyz, l0_points, keypoints=keypoints, orientations=keypoint_orientation,
+                                    radius=self.param['BaseScale'], is_training=is_training, 
                                     num_samples=self.param['num_samples'])
 
         end_points.update(endpoints_temp)
@@ -328,7 +332,7 @@ class Feat3dNetTrain(Feat3dNetInference):
     Contains operations specific to the Inference model of 3DFeatNet.
     Refactored from `Feat3dNet.get_train_model()`, and thus inherits from `Feat3dNetInference`.
     '''
-    def __init__(self, det_mlps: 'dict', ext_mlps: 'dict', params, name, is_training, bn=True):
+    def __init__(self, det_mlps: 'dict', ext_mlps: 'dict', params, name, bn=True):
         '''
         Constructs the training model. Essentially calls `get_inference_model`, but
         also handles the training triplets.
@@ -338,21 +342,21 @@ class Feat3dNetTrain(Feat3dNetInference):
             ext_mlps(dict< str, list<int> >): same as det_mlps
             params (dict): Passes in parameters from outside class for Detection and Extraction
             name (str)
-            is_training (bool): Set to true only if training, false otherwise
             bn (bool): Whether to perform batch normalization
 
         '''
-        super(Feat3dNetTrain, self).__init__(det_mlps, ext_mlps, params, name, is_training, bn)
+        super(Feat3dNetTrain, self).__init__(det_mlps, ext_mlps, params, name, bn)
 
         self._params = params
     
     @tf.Module.with_name_scope
-    def __call__(self, anchors, positives, negatives, compute_det_gradients=True):
+    def __call__(self, anchors, positives, negatives, is_training, compute_det_gradients=True):
         '''
         Args:
             anchors (tf.Tensor): Anchor point clouds of size (batch_size, ndataset, 3).
             positives (tf.Tensor): Positive point clouds, same size as anchors
             negatives (tf.Tensor): Negative point clouds, same size as anchors
+            is_training (bool): Train vs infer
             compute_det_gradients (bool): Whether to compute and output gradients for the the Detection stage.
         Returns:
             xyz, features, anchor_attention, end_points
@@ -363,7 +367,7 @@ class Feat3dNetTrain(Feat3dNetInference):
         end_points['input_pointclouds'] = point_clouds
 
         xyz, features, attention, endpoints_temp = \
-            super(Feat3dNetTrain, self).__call__(point_clouds, self._params, compute_det_gradients)
+            super(Feat3dNetTrain, self).__call__(point_clouds, is_training, compute_det_gradients)
 
         end_points['output_xyz'] = xyz
         end_points['output_features'] = features
@@ -378,7 +382,7 @@ class Feat3dNetTrain(Feat3dNetInference):
 
 
 class Feat3dNet(tf.keras.Model):
-    def __init__(self, train_or_infer, param=None):
+    def __init__(self, train_or_infer, name="3DFeatNet", param=None):
         """ Constructor: Creates the 3dFeatNet model by calling its relevant sub-objects.
 
         Args:
@@ -395,7 +399,7 @@ class Feat3dNet(tf.keras.Model):
                         'num_samples': Maximum number of points per cluster [64]
                         'margin': Triplet loss margin [0.2]
         """
-        super(Feat3dNet, self).__init__()
+        super(Feat3dNet, self).__init__(name=name)
 
         self.logger = logging.getLogger(self.__class__.__name__)
         self.param = {}
@@ -413,48 +417,104 @@ class Feat3dNet(tf.keras.Model):
 
         self.logger.info('Descriptor MLP sizes: {} | {} | {}'.format(mlp, mlp2, mlp3))
 
+        self.train_or_infer = train_or_infer
         if train_or_infer: 
-            self.Network = Feat3dNetTrain(det_mlps, ext_mlps, self.param, "Feat3dNet", train_or_infer)
+            self.Network = Feat3dNetTrain(det_mlps, ext_mlps, self.param, "Feat3dNet")
         else: 
-            self.Network = Feat3dNetInference(det_mlps, ext_mlps, self.param, "Feat3dNet", train_or_infer)
+            self.Network = Feat3dNetInference(det_mlps, ext_mlps, self.param, "Feat3dNet")
 
-    def call(self):
-        pass
+    def __call__(self, inputs: 'dict', training=False):
+        if self.train_or_infer:
+            anchors = inputs['anchors']
+            positives = inputs['positives']
+            negatives = inputs['negatives']
 
-    def get_placeholders(self, data_dim):
-        """
-        Gets placeholders for data, for triplet loss based training
+            return self.Network(anchors, positives, negatives, training)
+        else:
+            point_cloud = inputs['point_cloud']
 
-        Args:
-            data_dim: Dimension of point cloud. May be 3 (XYZ), 4 (XYZI), or 6 (XYZRGB or XYZNxNyNz)
-                      However for Feat3D-Net we only use the first 3 values
+            return self.Network(point_cloud, training)
 
-        Returns:
-            (anchor_pl, positive_pl, negative_pl)
 
-        """
-        pass
+    # def compile(self, optimizer, loss, metrics, loss_weights, weighted_metrics, 
+    #     run_eagerly, steps_per_execution, **kwargs):
+    #     '''
+    #     Configures the model for training.
+    #     '''
 
-    def get_loss(self):
+    #     return super().compile(optimizer=optimizer, loss=loss, 
+    #             metrics=metrics, loss_weights=loss_weights, 
+    #             weighted_metrics=weighted_metrics, run_eagerly=run_eagerly,
+    #             steps_per_execution=steps_per_execution, **kwargs)
+
+
+    # def evaluate(self, x, y, batch_size, verbose, sample_weight, steps, 
+    #             callbacks, max_queue_size, workers, use_multiprocessing, 
+    #             return_dict, **kwargs):
+    #     '''
+    #     Returns the loss value & metrics values for the model in test mode.
+    #     Computation is done in batches (see `batch_size`)
+    #     '''
+    #     return super().evaluate(x=x, y=y, batch_size=batch_size, verbose=verbose, 
+    #             sample_weight=sample_weight, steps=steps, callbacks=callbacks,
+    #             max_queue_size=max_queue_size, workers=workers, use_multiprocessing=use_multiprocessing, 
+    #             return_dict=return_dict, **kwargs)
+
+    @tf.function
+    def feat_3d_net_loss( self, y_true, y_pred ):
         """ 
         Computes the attention weighted alignment loss as described in our paper.
 
         Args:
-            xyz: Keypoint coordinates (Unused)
-            features: List of [anchor_features, positive_features, negative_features]
-            anchor_attention: Attention from anchor point clouds
-            end_points: end_points, which will be augmented and returned
+            y_true: Attention from anchor point clouds
+            y_pred: List of [anchor_features, positive_features, negative_features]
 
         Returns:
-            loss, end_points
+            loss (scalar)
         """
-        
-        pass
+        anchors, positives, negatives = y_pred
 
-    def get_train_op(self):
-        """ 
-        Gets training op
-        """
+        # Computes for each feature of the anchor, the distance to the nearest feature in the positive and negative
+        positive_dist = pairwise_dist(anchors, positives)
+        negative_dist = pairwise_dist(anchors, negatives)
+        best_positive = tf.reduce_min(positive_dist, axis=2)
+        best_negative = tf.reduce_min(negative_dist, axis=2)
+ 
+        if not self.param['Attention']:
+            sum_positive = tf.reduce_mean(best_positive, 1)
+            sum_negative = tf.reduce_mean(best_negative, 1)
+        else:
+            attention_sm = y_true / tf.reduce_sum(y_true, axis=1)[:, None]
+            sum_positive = tf.reduce_sum(attention_sm * best_positive, 1)
+            sum_negative = tf.reduce_sum(attention_sm * best_negative, 1)
 
-        pass
+            # tf.compat.v1.summary.histogram('normalized_attention', attention_sm)
+            tf.summary.histogram("normalized_attention", attention_sm)
+            triplet_cost = tf.maximum(0., sum_positive - sum_negative + self.param['margin'])
 
+            loss = tf.reduce_mean(triplet_cost)
+
+        # tf.compat.v1.summary.scalar('loss', loss)    # Force using the TF1 version of scalar summary
+        tf.compat.v1.summary.scalar('loss', loss)
+
+        return loss
+
+    # @tf.function
+    # def get_train_op(self, loss_op, lr=1e-5, global_step=None):
+    #     """ 
+    #     Gets training op
+    #     """
+    #     optimizer = tf.keras.optimizers.Adam(lr)
+
+
+    #     var_list = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES)
+
+    #     to_exclude = []
+    #     if self.param['freeze_scopes'] is not None:
+    #         for s in self.param['freeze_scopes']:
+    #             to_exclude += tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES, scope=s)
+    #     var_list = [v for v in var_list if v not in to_exclude]
+
+    #     train_op = optimizer.minimize(loss_op, global_step=global_step,
+    #                                   var_list=var_list)
+    #     return train_op
