@@ -258,13 +258,13 @@ class Feat3dNetInference(tf.Module):
     Contains operations specific to the Inference model of 3DFeatNet.
     Refactored from `Feat3dNet.get_inference_model()`
     '''
-    def __init__(self, det_mlps: 'dict', ext_mlps: 'dict', params: 'dict', name, bn=True):
+    def __init__(self, det_mlps: 'dict', ext_mlps: 'dict', param: 'dict', name, bn=True):
         """ Constructs the core 3DFeat-Net model.
 
         Args:
             det_mlps(dict< str, list<int> >): key: 'mlp*' corresponding to the list reqd for the respective mlp
             ext_mlps(dict< str, list<int> >): same as det_mlps
-            params (dict): Passes in parameters from outside class for Detection and Extraction
+            param (dict): Passes in parameters from outside class for Detection and Extraction
             name (str)
             bn (bool): Whether to perform batch normalization
 
@@ -279,11 +279,16 @@ class Feat3dNetInference(tf.Module):
         self.Extraction = FeatureExtractionModule(ext_mlps['mlp'], ext_mlps['mlp2'], 
                                 ext_mlps['mlp3'], "Feature_Ext_Module", bn)
 
-        self._num_clusters = params['num_clusters']
-        self._radius = params['BaseScale']
-        self._num_samples = params['num_samples']
-        self._NoRegress = params['NoRegress']
-        self._Attention = params['Attention']
+        self._num_clusters = param['num_clusters']
+        self._radius = param['BaseScale']
+        self._num_samples = param['num_samples']
+        self._NoRegress = param['NoRegress']
+        self._Attention = param['Attention']
+
+        self.layers = {
+            self.Detection.name : self.Detection.layers,
+            self.Extraction.name : self.Extraction.layers
+        }
     
     @tf.Module.with_name_scope
     def __call__(self, point_cloud, is_training, compute_det_gradients=True):
@@ -319,8 +324,8 @@ class Feat3dNetInference(tf.Module):
 
         xyz, features, endpoints_temp = \
             self.Extraction(l0_xyz, l0_points, keypoints=keypoints, orientations=keypoint_orientation,
-                                    radius=self.param['BaseScale'], is_training=is_training, 
-                                    num_samples=self.param['num_samples'])
+                                    radius=self._radius, is_training=is_training, 
+                                    num_samples=self._num_samples)
 
         end_points.update(endpoints_temp)
 
@@ -332,7 +337,7 @@ class Feat3dNetTrain(Feat3dNetInference):
     Contains operations specific to the Inference model of 3DFeatNet.
     Refactored from `Feat3dNet.get_train_model()`, and thus inherits from `Feat3dNetInference`.
     '''
-    def __init__(self, det_mlps: 'dict', ext_mlps: 'dict', params, name, bn=True):
+    def __init__(self, det_mlps: 'dict', ext_mlps: 'dict', param, name, bn=True):
         '''
         Constructs the training model. Essentially calls `get_inference_model`, but
         also handles the training triplets.
@@ -340,14 +345,12 @@ class Feat3dNetTrain(Feat3dNetInference):
         Args:
             det_mlps(dict< str, list<int> >): key: 'mlp*' corresponding to the list reqd for the respective mlp
             ext_mlps(dict< str, list<int> >): same as det_mlps
-            params (dict): Passes in parameters from outside class for Detection and Extraction
+            param (dict): Passes in parameters from outside class for Detection and Extraction
             name (str)
             bn (bool): Whether to perform batch normalization
 
         '''
-        super(Feat3dNetTrain, self).__init__(det_mlps, ext_mlps, params, name, bn)
-
-        self._params = params
+        super(Feat3dNetTrain, self).__init__(det_mlps, ext_mlps, param, name, bn)
     
     @tf.Module.with_name_scope
     def __call__(self, anchors, positives, negatives, is_training, compute_det_gradients=True):
@@ -423,6 +426,9 @@ class Feat3dNet(tf.keras.Model):
         else: 
             self.Network = Feat3dNetInference(det_mlps, ext_mlps, self.param, "Feat3dNet")
 
+        self.layers_ = self.Network.layers
+
+    @tf.function
     def call(self, inputs: 'list[tf.keras.Input]', training=False):
         if self.train_or_infer:
             anchors, positives, negatives = inputs

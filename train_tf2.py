@@ -8,7 +8,7 @@ import sys
 import tensorflow as tf
 from tensorflow.python.keras import optimizers
 from tensorflow.python.ops.numpy_ops.np_math_ops import negative, positive
-from models import feat3dnet_tf2
+# from models import feat3dnet_tf2
 
 # from models.net_factory import get_network
 from models.feat3dnet_tf2 import Feat3dNet
@@ -109,7 +109,12 @@ def train():
                 train_file, train_data.size)
     
     train_augmentations = get_augmentations_from_list(args.augmentation, upright_axis=UPRIGHT_AXIS)
-    
+
+    # init validation data
+    val_folder = os.path.join(args.data_dir, 'clusters')
+    val_groundtruths = load_validation_groundtruths(os.path.join(val_folder, 'filenames.txt'),
+                                                    proportion=VAL_PROPORTION)
+
     # Model
     param = {'NoRegress': args.noregress, 'BaseScale': args.base_scale, 'Attention': not args.noattention,
              'margin': args.margin, 'num_clusters': NUM_CLUSTERS, 'num_samples': args.num_samples,
@@ -173,18 +178,10 @@ def train():
 
                 print()
                 # ---------------------------- TEST EVAL -----------------------
-                # TODO get point cloud
-                results = model.test_on_batch(point_cloud)
-                metrics_names = model.metrics_names
-                
-                logger.info("Test: ")
-                for i in range(len(metrics_names)):
-                    logger.info("{}={}".format(metrics_names[i], result[i]))
-
                 # TODO Add summary saving
 
                 # TODO Finish up validate
-                fp_rate = validate(sess, end_points, is_training, val_folder, val_groundtruths, args.data_dim)
+                fp_rate = validate(model, val_folder, val_groundtruths, args.data_dim)
 
                 # TODO change this to Summary object
                 test_summary = tf.compat.v1.Summary(value=[
@@ -230,7 +227,7 @@ def load_validation_groundtruths(fname, proportion=1):
 
     return groundtruths
 
-def validate(end_points, is_training, val_folder, val_groundtruths, data_dim):
+def validate(model: Feat3dNet, val_folder, val_groundtruths, data_dim):
     
     if val_groundtruths is None or len(val_groundtruths)==0:
         return 1
@@ -266,10 +263,9 @@ def validate(end_points, is_training, val_folder, val_groundtruths, data_dim):
         clouds1 = np.concatenate(clouds1, axis=0)[None, :, :]
         clouds2 = np.concatenate(clouds2, axis=0)[None, :, :]
 
-        xyz1, features1 = 0,0 # TODO Placeholder for an inference function!!!
+        xyz1, features1,_,_ = model(inputs=clouds1, training=False) # TODO Placeholder for an inference function!!!
 
-        xyz2, features2 = 0,0 # TODO Same as above.
-
+        xyz2, features2,_,_ = model(inputs=clouds2, training=False) # TODO Same as above.
 
         d = np.sqrt(np.sum(np.square(np.squeeze(features1 - features2)), axis=1))
         d = d[:num_clusters]
