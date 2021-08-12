@@ -8,8 +8,8 @@ import sys
 import tensorflow as tf
 from tensorflow.python.keras import metrics, optimizers
 from tensorflow.python.ops.numpy_ops.np_math_ops import negative, positive
-# from models import feat3dnet_tf2
 
+# from models import feat3dnet_tf2
 # from models.net_factory import get_network
 from models.feat3dnet_tf2 import Feat3dNet
 
@@ -175,7 +175,7 @@ def train():
                     tf.summary.scalar(metrics_names[i], result[i])
                 
             if step % args.checkpoint_every_n_steps == 0:
-                savepath = os.path.join(checkpoint_dir, "_{}".format(step))
+                savepath = checkpoint_dir + "_{}".format(step)
                 model.save_weights(savepath)
                 logger.info("At step {}, saved checkpoint at {}.".format(step, savepath))
 

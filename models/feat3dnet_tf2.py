@@ -302,6 +302,9 @@ class Feat3dNetInference(tf.Module):
             xyz, features, attention, end_points
         '''
 
+        #TODO Change if reqd
+        compute_det_gradients = is_training
+
         l0_xyz = point_cloud[:, :, :3]
         l0_points = None    # Normal information not used in 3DFeat-Net
         end_points = {}
