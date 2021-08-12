@@ -96,8 +96,10 @@ def log_arguments():
     s = 'Arguments:\n' + s
     logger.info(s)
 
-
+@tf.function
 def train():
+
+    ### BEGIN INIT STUFF ###
 
     log_arguments()
 
@@ -127,18 +129,23 @@ def train():
                     loss=model.feat_3d_net_loss)    # Unsure what 'metrics' to apply here
 
     # init model
-    MODEL_SAVEPATH = os.path.join(checkpoint_dir, '3DFeatNet.save')
-    if os.path.isfile(MODEL_SAVEPATH):
-        model.load_weights(MODEL_SAVEPATH)
-        logger.info('Restored weights from %s' %MODEL_SAVEPATH)
+    model_find = tf.train.latest_checkpoint(checkpoint_dir)
+    if model_find is not None:
+        model.load_weights(model_find)
+        logger.info('Restored weights from {}.'.format(model_find))
+    else:
+        logger.info('Unable to find a latest checkpoint in {}'.format(checkpoint_dir))
     
-    # Saver and summary writers
-    # This could be removed and changed to a function callback.
-    train_writer, test_writer = get_summary_writers(args.log_dir)
+    # init summary writers
+    logger.info('Summaries will be stored in: %s', args.log_dir)
+    train_writer = tf.summary.create_file_writer(os.path.join(args.log_dir, 'train'))
+    test_writer = tf.summary.create_file_writer(os.path.join(args.log_dir, 'test'))
     train_writer.init()
     test_writer.init()
 
     logger.info('Training Batch size: %i, validation batch size: %i', BATCH_SIZE, VAL_BATCH_SIZE)
+
+    ### END INIT STUFF ###
 
     step = 0
     for iEpoch in range(args.num_epochs):
@@ -168,9 +175,9 @@ def train():
                     tf.summary.scalar(metrics_names[i], result[i])
                 
             if step % args.checkpoint_every_n_steps == 0:
-                savepath = os.path.join(MODEL_SAVEPATH, "_{}".format(step))
+                savepath = os.path.join(checkpoint_dir, "_{}".format(step))
+                model.save_weights(savepath)
                 logger.info("At step {}, saved checkpoint at {}.".format(step, savepath))
-                model.save(savepath)
 
             # # Run through validation data
             if step % args.validate_every_n_steps == 0 or step == 1:
@@ -190,19 +197,6 @@ def train():
 
             step += 1
             print()
-
-
-def get_summary_writers(log_dir):
-
-    logger.info('Summaries will be stored in: %s', log_dir)
-    train_writer = tf.summary.create_file_writer(os.path.join(log_dir, 'train'))
-    test_writer = tf.summary.create_file_writer(os.path.join(log_dir, 'test'))
-
-    # train_writer = tf.compat.v1.summary.FileWriter(os.path.join(log_dir, 'train'))
-    # test_writer = tf.compat.v1.summary.FileWriter(os.path.join(log_dir, 'test'))
-
-    return train_writer, test_writer
-
 
 def load_validation_groundtruths(fname, proportion=1):
     groundtruths = []
@@ -271,118 +265,6 @@ def validate(model: Feat3dNet, val_folder, val_groundtruths, data_dim):
     fp_rate = num_FP / (num_FP + num_TN)
 
     return fp_rate
-
-"""
-def initialize_model(sess, checkpoint, ignore_missing_vars=False, restore_exclude=None):
-    ''' Initialize model weights
-
-    :param sess: tf.Session
-    :param checkpoint: Checkpoint to load. Set to none if starting from scratch
-    :param ignore_missing_vars: If false, will throw exception when variables are not found
-                                in the checkpoint
-    :param restore_exclude: Scopes to exclude from checkpoint
-    :return:
-    '''
-    logger.info('Initializing weights')
-
-    sess.run(tf.compat.v1.global_variables_initializer())
-
-    if checkpoint is not None:
-
-        if os.path.isdir(checkpoint):
-            checkpoint = tf.train.latest_checkpoint(checkpoint)
-
-        logger.info('Restoring model from {}'.format(checkpoint))
-
-        # Get a list of all variables in the checkpoint.
-        model_var_list = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES)
-
-        exclude_list = []
-        if restore_exclude is not None:
-            for e in restore_exclude:
-                exclude_list += tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.GLOBAL_VARIABLES, scope=e)
-        for e in exclude_list:
-            logger.info('Excluded from model restore: %s', e.op.name)
-
-        if ignore_missing_vars:
-            checkpoint_var_names = get_tensors_in_checkpoint_file(checkpoint)
-            missing = \
-            [m.op.name for m in model_var_list if m.op.name not in checkpoint_var_names and m not in exclude_list]
-
-            for m in missing:
-                logger.warning('Variable missing from checkpoint: %s', m)
-
-            var_list = [m for m in model_var_list if m.op.name in checkpoint_var_names and m not in exclude_list]
-
-        else:
-            var_list = [m for m in model_var_list if m not in exclude_list]
-
-        saver = tf.compat.v1.train.Saver(var_list)
-
-        saver.restore(sess, checkpoint) # Restores variables from saved session.
-
-    logger.info('Weights initialized')
-"""
-
-
-"""
-def validate(sess, end_points, is_training, val_folder, val_groundtruths, data_dim):
-
-    if val_groundtruths is None or len(val_groundtruths) == 0:
-        return 1
-
-    positive_dist = []
-    negative_dist = []
-    for iTest in range(0, len(val_groundtruths), NUM_CLUSTERS):
-
-        clouds1, clouds2 = [], []
-        # We batch the validation by stacking all the validation clusters into a single point cloud,
-        # while keeping them apart such that they do not overlap each other. This way NUM_CLUSTERS
-        # clusters can be computed in a single pass
-        for jTest in range(iTest, min(iTest + NUM_CLUSTERS, len(val_groundtruths))):
-            offset = (jTest - iTest) * 100
-            cluster_idx = val_groundtruths[jTest][0]
-
-            cloud1 = DataGenerator.load_point_cloud(
-                os.path.join(val_folder, '{}_0.bin'.format(cluster_idx)), data_dim)
-            cloud1[:, 0] += offset
-            clouds1.append(cloud1)
-
-            cloud2 = DataGenerator.load_point_cloud(
-                os.path.join(val_folder, '{}_1.bin'.format(cluster_idx)), data_dim)
-            cloud2[:, 0] += offset
-            clouds2.append(cloud2)
-
-        offsets = np.arange(0, NUM_CLUSTERS * 100, 100)
-        num_clusters = min(len(val_groundtruths) - iTest, NUM_CLUSTERS)
-        offsets[num_clusters:] = 0
-        offsets = np.pad(offsets[:, None], ((0, 0), (0, 2)), mode='constant', constant_values=0)[None, :, :]
-
-        clouds1 = np.concatenate(clouds1, axis=0)[None, :, :]
-        clouds2 = np.concatenate(clouds2, axis=0)[None, :, :]
-
-        xyz1, features1 = \
-            sess.run([end_points['output_xyz'], end_points['output_features']],
-                     feed_dict={end_points['input_pointclouds']: clouds1, is_training: False,
-                                end_points['keypoints']: offsets})
-        xyz2, features2 = \
-            sess.run([end_points['output_xyz'], end_points['output_features']],
-                     feed_dict={end_points['input_pointclouds']: clouds2, is_training: False,
-                                end_points['keypoints']: offsets})
-
-        d = np.sqrt(np.sum(np.square(np.squeeze(features1 - features2)), axis=1))
-        d = d[:num_clusters]
-
-        positive_dist += [d[i] for i in range(len(d)) if val_groundtruths[iTest + i][1] == 1]
-        negative_dist += [d[i] for i in range(len(d)) if val_groundtruths[iTest + i][1] == 0]
-
-    d_at_95_recall = np.percentile(positive_dist, 95)
-    num_FP = np.count_nonzero(np.array(negative_dist) < d_at_95_recall)
-    num_TN = len(negative_dist) - num_FP
-    fp_rate = num_FP / (num_FP + num_TN)
-
-    return fp_rate
-"""
 
 if __name__ == '__main__':
 
