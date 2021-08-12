@@ -6,7 +6,7 @@ import numpy as np
 import os
 import sys
 import tensorflow as tf
-from tensorflow.python.keras import optimizers
+from tensorflow.python.keras import metrics, optimizers
 from tensorflow.python.ops.numpy_ops.np_math_ops import negative, positive
 # from models import feat3dnet_tf2
 
@@ -163,32 +163,26 @@ def train():
             for i in range(len(metrics_names)):
                 logger.info("{}={}".format(metrics_names[i], result[i]))
 
-            # TODO Add summary saving
-            if step % args.summary_every_n_steps == 0:
-                with train_writer.as_default():
-                    # tf.summary.
-                    pass
+            with train_writer.as_default():
+                for i in range(len(metrics_names)):
+                    tf.summary.scalar(metrics_names[i], result[i])
                 
             if step % args.checkpoint_every_n_steps == 0:
-                # TODO Add checkpoint saving
-                pass
+                savepath = os.path.join(MODEL_SAVEPATH, "_{}".format(step))
+                logger.info("At step {}, saved checkpoint at {}.".format(step, savepath))
+                model.save(savepath)
 
             # # Run through validation data
             if step % args.validate_every_n_steps == 0 or step == 1:
 
                 print()
                 # ---------------------------- TEST EVAL -----------------------
-                # TODO Add summary saving
-
-                # TODO Finish up validate
                 fp_rate = validate(model, val_folder, val_groundtruths, args.data_dim)
 
-                # TODO change this to Summary object
-                test_summary = tf.compat.v1.Summary(value=[
-                    tf.compat.v1.Summary.Value(tag="fp_rate", simple_value=fp_rate),
-                ])
-                test_writer.add_summary(test_summary, step)
-                logger.info('Step %i. FP Rate: %f', step, fp_rate)
+                with test_writer.as_default():
+                    tf.summary.scalar("fp_rate", fp_rate)
+
+                logger.info('Validation for step %i. FP Rate: %f', step, fp_rate)
                 # ---------------------------- TEST EVAL End -----------------------
 
                 test_writer.flush()
@@ -196,8 +190,6 @@ def train():
 
             step += 1
             print()
-
-
 
 
 def get_summary_writers(log_dir):
@@ -263,9 +255,9 @@ def validate(model: Feat3dNet, val_folder, val_groundtruths, data_dim):
         clouds1 = np.concatenate(clouds1, axis=0)[None, :, :]
         clouds2 = np.concatenate(clouds2, axis=0)[None, :, :]
 
-        xyz1, features1,_,_ = model(inputs=clouds1, training=False) # TODO Placeholder for an inference function!!!
+        xyz1, features1,_,_ = model(inputs=clouds1, training=False)
 
-        xyz2, features2,_,_ = model(inputs=clouds2, training=False) # TODO Same as above.
+        xyz2, features2,_,_ = model(inputs=clouds2, training=False)
 
         d = np.sqrt(np.sum(np.square(np.squeeze(features1 - features2)), axis=1))
         d = d[:num_clusters]
