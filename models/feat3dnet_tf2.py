@@ -1,8 +1,8 @@
 import logging
 import tensorflow as tf
-from tensorflow._api.v2 import train
-from tensorflow.python.ops.gen_state_ops import assign_add_eager_fallback
-from tensorflow.python.ops.numpy_ops.np_math_ops import positive
+# from tensorflow._api.v2 import train
+# from tensorflow.python.ops.gen_state_ops import assign_add_eager_fallback
+# from tensorflow.python.ops.numpy_ops.np_math_ops import positive
 
 from models.pointnet_common import sample_points, sample_and_group, sample_and_group_all, query_and_group_points
 from models.layers_tf2 import pairwise_dist, MaxPoolAxis, MaxPoolConcat
@@ -289,6 +289,8 @@ class Feat3dNetInference(tf.Module):
             self.Detection.name : self.Detection.layers,
             self.Extraction.name : self.Extraction.layers
         }
+
+        self.end_points = {}
     
     @tf.Module.with_name_scope
     def __call__(self, point_cloud, is_training, compute_det_gradients=True):
@@ -307,16 +309,15 @@ class Feat3dNetInference(tf.Module):
 
         l0_xyz = point_cloud[:, :, :3]
         l0_points = None    # Normal information not used in 3DFeat-Net
-        end_points = {}
 
         keypoints, idx, attention, orientation, end_points_temp = \
             self.Detection(l0_xyz, l0_points, self._num_clusters, self._radius, 
                             is_training, self._num_samples, compute_det_gradients)
 
-        end_points.update(end_points_temp)
-        end_points['keypoints'] = keypoints
-        end_points['attention'] = attention
-        end_points['orientation'] = orientation
+        self.end_points.update(end_points_temp)
+        self.end_points['keypoints'] = keypoints
+        self.end_points['attention'] = attention
+        self.end_points['orientation'] = orientation
 
         keypoint_orientation = orientation
 
@@ -330,9 +331,9 @@ class Feat3dNetInference(tf.Module):
                                     radius=self._radius, is_training=is_training, 
                                     num_samples=self._num_samples)
 
-        end_points.update(endpoints_temp)
+        self.end_points.update(endpoints_temp)
 
-        return xyz, features, attention, end_points
+        return xyz, features, attention, self.end_points
     
 
 class Feat3dNetTrain(Feat3dNetInference):
@@ -367,24 +368,23 @@ class Feat3dNetTrain(Feat3dNetInference):
         Returns:
             xyz, features, anchor_attention, end_points
         '''
-        end_points = {}
 
         point_clouds = tf.concat([anchors, positives, negatives], axis=0)
-        end_points['input_pointclouds'] = point_clouds
+        self.end_points['input_pointclouds'] = point_clouds
 
         xyz, features, attention, endpoints_temp = \
             super(Feat3dNetTrain, self).__call__(point_clouds, is_training, compute_det_gradients)
 
-        end_points['output_xyz'] = xyz
-        end_points['output_features'] = features
-        end_points.update(endpoints_temp)
+        self.end_points['output_xyz'] = xyz
+        self.end_points['output_features'] = features
+        self.end_points.update(endpoints_temp)
 
         xyz = tf.split(xyz, 3, axis=0, name="xyz")
         features = tf.split(features, 3, axis=0, name="features")
         anchor_attention = tf.split(attention, 3, axis=0, 
             name="anchor_attention")[0] if attention is not None else None
 
-        return xyz, features, anchor_attention, end_points
+        return xyz, features, anchor_attention, self.end_points
 
 
 class Feat3dNet(tf.keras.Model):
@@ -431,7 +431,7 @@ class Feat3dNet(tf.keras.Model):
 
         self.layers_ = self.Network.layers
 
-    @tf.function
+    # @tf.function
     def call(self, inputs: 'list[tf.keras.Input]', training=False):
         if self.train_or_infer:
             anchors, positives, negatives = inputs
@@ -446,32 +446,7 @@ class Feat3dNet(tf.keras.Model):
 
             return self.Network(point_cloud, training)
 
-
-    # def compile(self, optimizer, loss, metrics, loss_weights, weighted_metrics, 
-    #     run_eagerly, steps_per_execution, **kwargs):
-    #     '''
-    #     Configures the model for training.
-    #     '''
-
-    #     return super().compile(optimizer=optimizer, loss=loss, 
-    #             metrics=metrics, loss_weights=loss_weights, 
-    #             weighted_metrics=weighted_metrics, run_eagerly=run_eagerly,
-    #             steps_per_execution=steps_per_execution, **kwargs)
-
-
-    # def evaluate(self, x, y, batch_size, verbose, sample_weight, steps, 
-    #             callbacks, max_queue_size, workers, use_multiprocessing, 
-    #             return_dict, **kwargs):
-    #     '''
-    #     Returns the loss value & metrics values for the model in test mode.
-    #     Computation is done in batches (see `batch_size`)
-    #     '''
-    #     return super().evaluate(x=x, y=y, batch_size=batch_size, verbose=verbose, 
-    #             sample_weight=sample_weight, steps=steps, callbacks=callbacks,
-    #             max_queue_size=max_queue_size, workers=workers, use_multiprocessing=use_multiprocessing, 
-    #             return_dict=return_dict, **kwargs)
-
-    @tf.function
+    # @tf.function
     def feat_3d_net_loss( self, y_true, y_pred ):
         """ 
         Computes the attention weighted alignment loss as described in our paper.
@@ -501,31 +476,12 @@ class Feat3dNet(tf.keras.Model):
 
             # tf.compat.v1.summary.histogram('normalized_attention', attention_sm)
             tf.summary.histogram("normalized_attention", attention_sm)
-            triplet_cost = tf.maximum(0., sum_positive - sum_negative + self.param['margin'])
+            self.Network.end_points['normalized_attention'] = attention_sm
 
-            loss = tf.reduce_mean(triplet_cost)
+        self.Network.end_points['sum_positive'] = sum_positive
+        self.Network.end_points['sum_negative'] = sum_negative
+        triplet_cost = tf.maximum(0., sum_positive - sum_negative + self.param['margin'])
 
-        # tf.compat.v1.summary.scalar('loss', loss)    # Force using the TF1 version of scalar summary
-        tf.compat.v1.summary.scalar('loss', loss)
+        loss = tf.reduce_mean(triplet_cost)
 
-        return loss
-
-    # @tf.function
-    # def get_train_op(self, loss_op, lr=1e-5, global_step=None):
-    #     """ 
-    #     Gets training op
-    #     """
-    #     optimizer = tf.keras.optimizers.Adam(lr)
-
-
-    #     var_list = tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES)
-
-    #     to_exclude = []
-    #     if self.param['freeze_scopes'] is not None:
-    #         for s in self.param['freeze_scopes']:
-    #             to_exclude += tf.compat.v1.get_collection(tf.compat.v1.GraphKeys.TRAINABLE_VARIABLES, scope=s)
-    #     var_list = [v for v in var_list if v not in to_exclude]
-
-    #     train_op = optimizer.minimize(loss_op, global_step=global_step,
-    #                                   var_list=var_list)
-    #     return train_op
+        return loss, self.Network.end_points
