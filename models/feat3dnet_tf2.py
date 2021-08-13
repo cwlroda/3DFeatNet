@@ -36,7 +36,7 @@ class PointnetSaModule(tf.Module):
                               )
             if bn:
                 # TODO figure out the appropriate axis. Rest are set to default.
-                self.layers.append( tf.keras.layers.BatchNormalization( axis=-1, name="bn" ) )
+                self.layers.append( tf.keras.layers.BatchNormalization( axis=-1, name='bn_%d' %(i) ) )
 
         # Max pool, then concatenate
         self.layers.append( MaxPoolConcat() ) # Custom layer pooling only on one axis then tiling then concat
@@ -50,7 +50,7 @@ class PointnetSaModule(tf.Module):
                                   )
                 if bn:
                     # TODO figure out the appropriate axis. Rest are set to default.
-                    self.layers.append( tf.keras.layers.BatchNormalization( axis=-1, name="bn_mid" ) )
+                    self.layers.append( tf.keras.layers.BatchNormalization( axis=-1, name='bn_mid_%d' %(i) ) )
         
         # Max pool again
         self.layers.append( MaxPoolAxis() )
@@ -64,7 +64,7 @@ class PointnetSaModule(tf.Module):
                                   )
                 if bn:
                     # TODO figure out the appropriate axis. Rest are set to default.
-                    self.layers.append( tf.keras.layers.BatchNormalization( axis=-1, name="bn_post" ) )
+                    self.layers.append( tf.keras.layers.BatchNormalization( axis=-1, name='bn_post_%d' %(i) ) )
 
     @tf.Module.with_name_scope
     def __call__(self, xyz: tf.Tensor, points: tf.Tensor, npoint: int, radius: float, nsample,
@@ -109,7 +109,6 @@ class PointnetSaModule(tf.Module):
 
         return new_xyz, new_points, idx, end_points
 
-# TODO: Check if defining the gradients within this module (translate from tf1 to tf2...) is reqd
 class FeatureDetectionModule(tf.Module):
     """Detect features in point cloud.
     
@@ -140,7 +139,7 @@ class FeatureDetectionModule(tf.Module):
                               )
             if bn:
                 # TODO figure out the appropriate axis. Rest are set to default.
-                self.layers.append( tf.keras.layers.BatchNormalization( axis=-1, name="bn" ) )
+                self.layers.append( tf.keras.layers.BatchNormalization( axis=-1, name='bn_%d' %(i) ) )
 
         # Max pool, then concatenate
         self.layers.append( MaxPoolAxis() ) # Custom layer pooling only on one axis then tiling then concat
@@ -153,7 +152,7 @@ class FeatureDetectionModule(tf.Module):
                                   )
                 if bn:
                     # TODO figure out the appropriate axis. Rest are set to default.
-                    self.layers.append( tf.keras.layers.BatchNormalization( axis=-1, name="bn_mid" ) )
+                    self.layers.append( tf.keras.layers.BatchNormalization( axis=-1, name='bn_mid_%d' %(i) ) )
 
         # Two "endpoints" of the calculation
         self.attention = tf.keras.layers.Conv2D(1, kernel_size=[1,1], strides=[1,1], padding='valid',
@@ -190,19 +189,28 @@ class FeatureDetectionModule(tf.Module):
 
         # TODO resolve gradients returning None
         for layer in self.layers:
+            new_points = layer(new_points, training=is_training)
+                    
+            '''
+            TODO
+            This probably doesn't work because somehow the calc is going out of TensorFlow.
+            Or perhaps, we are attempting to watch tf.Tensors when tf.GradientTape can only watch
+            for tf.Variables.
+            Hence, we need to refactor the code such that this is supported.
+
             with tf.GradientTape(watch_accessed_variables=True) as tape_det:
-                # tape_det.watch([xyz, new_points, new_xyz, layer.trainable_weights])
+                tape_det.watch([xyz, new_points, new_xyz, layer.trainable_weights])
+                print(layer.name)
                 new_points = layer(new_points, training=is_training)
         
+                grad = tape_det.gradient(new_points, xyz)
                 if layer.name[:4] == "conv" and compute_det_gradients:
-                    # print(tape.watched_variables())
-
-                    grad = tape_det.gradient(new_points, xyz)
+                    # print(tape_det.watched_variables())
                     print('Gradients | det |', last_layer,':', grad)
 
                     self.end_points['gradients']['det']['mlp_{}'.format(last_layer)] = grad
                     last_layer += 1
-
+            '''
 
         # Attention and orientation regression
         attention_out = self.attention(new_points)
