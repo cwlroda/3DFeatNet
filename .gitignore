@@ -125,3 +125,4 @@ scripts_evaluation/results_*/
 # Datasets
 data/oxford/*
 data/oxford
+ckpt_tf2.tar.gz
