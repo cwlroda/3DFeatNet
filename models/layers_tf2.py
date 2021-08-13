@@ -50,7 +50,7 @@ class MaxPoolAxis(tf.keras.layers.Layer):
     '''Computes custom max pooling operation on custom axis.
     '''
     def __init__(self, axis:'list[int]'=[2]):
-        super(MaxPoolAxis, self).__init__()
+        super(MaxPoolAxis, self).__init__(name="MaxPoolAxis")
         self.axis = axis
 
     def call(self, input_pts):
@@ -64,7 +64,7 @@ class MaxPoolConcat(tf.keras.layers.Layer):
         Inherits from maxPoolAxis.
     '''
     def __init__(self, axis:'list[int]'=[2]):
-        super(MaxPoolConcat, self).__init__()
+        super(MaxPoolConcat, self).__init__(name="MaxPoolConcat")
         self.maxPoolAxis = MaxPoolAxis(axis)
 
     def call(self, input_pts):
