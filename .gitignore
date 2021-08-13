@@ -118,6 +118,7 @@ scrap*
 scripts_evaluation/results_*/
 *.mat
 **ckpt/
+**ckpt_tf2/
 
 # Submap data
 *.bin
