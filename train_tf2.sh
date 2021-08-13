@@ -1,7 +1,7 @@
 #/bin/bash
 
 DATASET_DIR=./data/oxford
-LOG_DIR=./ckpt
+LOG_DIR=./ckpt_tf2
 GPU_ID=0
 
 set -e
