@@ -127,7 +127,7 @@ def train():
     optimizer = tf.keras.optimizers.Adam(1e-5)
     
     # Need to put in a dummy input to initialize the model.
-    model.build(tf.TensorShape([BATCH_SIZE, args.num_points, args.data_dim, 3]))
+    model.build( 3 * [ tf.TensorShape([BATCH_SIZE, args.num_points, args.data_dim]) ] )
     # rand_input = [tf.random.normal([BATCH_SIZE, args.num_points, args.data_dim])] * 3
     # model(rand_input, True)
 
