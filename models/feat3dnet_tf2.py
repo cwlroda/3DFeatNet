@@ -12,7 +12,7 @@ class PointnetSaModule(tf.Module):
         normalize points based on radius, and for a third layer of MLP
     """
     
-    def __init__(self, mlp, mlp2, mlp3, name, bn=True, final_relu=True):
+    def __init__(self, mlp, mlp2, mlp3, name="PointnetSaModule", bn=True, final_relu=True):
         '''
         Args:
             mlp: list of int32 -- output size for MLP on each point
@@ -92,22 +92,22 @@ class PointnetSaModule(tf.Module):
         """
 
         if npoint is None:
-            self.nsample = xyz.get_shape()[1]   # Number of samples
-            self.new_xyz, self.new_points, self.idx, self.grouped_xyz = \
+            nsample = xyz.get_shape()[1]   # Number of samples
+            new_xyz, new_points, idx, grouped_xyz = \
                 sample_and_group_all(xyz, points, use_xyz)
         else:
-            self.new_xyz, self.new_points, self.idx, self.grouped_xyz, self.end_points = \
+            new_xyz, new_points, idx, grouped_xyz, end_points = \
                 sample_and_group(npoint, radius, nsample, xyz, points, tnet_spec,
                             knn, use_xyz, keypoints=keypoints,
                             orientations=orientations,
                             normalize_radius=normalize_radius)
 
         for layer in self.layers:
-            self.new_points = layer(self.new_points, training=is_training)
+            new_points = layer(new_points, training=is_training)
 
-        self.new_points = tf.squeeze(self.new_points, [2])
+        new_points = tf.squeeze(new_points, [2])
 
-        return self.new_xyz, self.new_points, self.idx, self.end_points
+        return new_xyz, new_points, idx, end_points
 
 # TODO: Check if defining the gradients within this module (translate from tf1 to tf2...) is reqd
 class FeatureDetectionModule(tf.Module):
@@ -188,16 +188,22 @@ class FeatureDetectionModule(tf.Module):
 
         last_layer = 0
 
+        # TODO resolve gradients returning None
         for layer in self.layers:
-            new_points = layer(new_points, training=is_training)
-            
-            if layer.name[:4] == "conv" and compute_det_gradients:
-                # TODO This might not work out of the box
-                self.end_points['gradients']['det']['mlp_{}'.format(last_layer)] = \
-                    tf.gradients(new_points, xyz, new_points)
-
-                last_layer += 1
+            with tf.GradientTape(watch_accessed_variables=True) as tape_det:
+                # tape_det.watch([xyz, new_points, new_xyz, layer.trainable_weights])
+                new_points = layer(new_points, training=is_training)
         
+                if layer.name[:4] == "conv" and compute_det_gradients:
+                    # print(tape.watched_variables())
+
+                    grad = tape_det.gradient(new_points, xyz)
+                    print('Gradients | det |', last_layer,':', grad)
+
+                    self.end_points['gradients']['det']['mlp_{}'.format(last_layer)] = grad
+                    last_layer += 1
+
+
         # Attention and orientation regression
         attention_out = self.attention(new_points)
         attention = tf.squeeze(attention_out, axis=[2, 3])
@@ -308,6 +314,9 @@ class Feat3dNetInference(tf.Module):
         compute_det_gradients = is_training
 
         l0_xyz = point_cloud[:, :, :3]
+        # Check that the dimension is correct
+        print(">>> Shape of input point cloud: ", l0_xyz.shape)
+
         l0_points = None    # Normal information not used in 3DFeat-Net
 
         keypoints, idx, attention, orientation, end_points_temp = \
@@ -368,6 +377,9 @@ class Feat3dNetTrain(Feat3dNetInference):
         Returns:
             xyz, features, anchor_attention, end_points
         '''
+
+        #TODO Change if reqd
+        compute_det_gradients = is_training
 
         point_clouds = tf.concat([anchors, positives, negatives], axis=0)
         self.end_points['input_pointclouds'] = point_clouds
@@ -431,13 +443,12 @@ class Feat3dNet(tf.keras.Model):
 
         self.layers_ = self.Network.layers
 
-    # @tf.function
     def call(self, inputs: 'list[tf.keras.Input]', training=False):
         if self.train_or_infer:
-            anchors, positives, negatives = inputs
-            # anchors = inputs['anchors']
-            # positives = inputs['positives']
-            # negatives = inputs['negatives']
+            # anchors, positives, negatives = inputs
+            anchors = inputs[0]
+            positives = inputs[1]
+            negatives = inputs[2]
 
             return self.Network(anchors, positives, negatives, training)
         else:
@@ -446,7 +457,6 @@ class Feat3dNet(tf.keras.Model):
 
             return self.Network(point_cloud, training)
 
-    # @tf.function
     def feat_3d_net_loss( self, y_true, y_pred ):
         """ 
         Computes the attention weighted alignment loss as described in our paper.
@@ -456,9 +466,11 @@ class Feat3dNet(tf.keras.Model):
             y_pred: List of [anchor_features, positive_features, negative_features]
 
         Returns:
-            loss (scalar)
+            loss (tf.Tensor scalar)
         """
-        anchors, positives, negatives = y_pred
+        anchors = y_pred[0]
+        positives = y_pred[1]
+        negatives = y_pred[2]
 
         # Computes for each feature of the anchor, the distance to the nearest feature in the positive and negative
         positive_dist = pairwise_dist(anchors, positives)
