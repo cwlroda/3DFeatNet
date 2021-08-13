@@ -96,7 +96,6 @@ def log_arguments():
     s = 'Arguments:\n' + s
     logger.info(s)
 
-# @tf.function
 def train():
 
     ### BEGIN INIT STUFF ###
@@ -126,7 +125,13 @@ def train():
     # Hardcode to get tf2 model
     model = Feat3dNet(True, param=param)
     optimizer = tf.keras.optimizers.Adam(1e-5)
-    # model.compile(optimizer=tf.keras.optimizers.Adam(1e-5), loss=model.feat_3d_net_loss)    
+    
+    # Need to put in a dummy input to initialize the model.
+    model.build(tf.TensorShape([BATCH_SIZE, args.num_points, args.data_dim, 3]))
+    # rand_input = [tf.random.normal([BATCH_SIZE, args.num_points, args.data_dim])] * 3
+    # model(rand_input, True)
+
+    # model.compile(optimizer=optimizer, loss=model.feat_3d_net_loss)    
     # Unsure what 'metrics' to apply here
 
     # init model
@@ -145,7 +150,16 @@ def train():
     test_writer.init()
 
     logger.info('Training Batch size: %i, validation batch size: %i', BATCH_SIZE, VAL_BATCH_SIZE)
+    logger.info("TF Executing Eagerly? {}".format(tf.executing_eagerly() ))  # Shld be true
 
+    logger.info("Model has {} trainable weights, for example {} [5/{}].".format(
+        len(model.trainable_weights),
+        [w.name for w in model.trainable_weights[:5]],
+        len(model.trainable_weights)
+    ))
+
+    # model.summary()
+    # input(">>>Continue?<<<") # i love breakpoints
     ### END INIT STUFF ###
 
     step = 0
@@ -161,30 +175,35 @@ def train():
                                                                     num_points=args.num_points,
                                                                     augmentation=train_augmentations)
             next_triplet = [anchors, positives, negatives]
-            
+            # logger.info("Shape of next_triplet is {}.".format(next_triplet.shape))
+
             if anchors is None or anchors.shape[0] != BATCH_SIZE:
                 break
             
-            # Training
-            with tf.GradientTape() as tape:
-                # Run forward pass
-                _, _, att, _ = model(next_triplet, training=True)
-
-                loss_val = model.feat_3d_net_loss(att, next_triplet)
+            # loss_val = tf.zeros(shape=1, dtype=tf.float32, name="LOSS")
             
+            # Training
+            with tf.GradientTape(watch_accessed_variables=True) as tape_train:
+                # tape_train.watch([loss_val, model.trainable_weights])
+
+                # Run forward pass
+                _1, _2, att, _3 = model(next_triplet, training=True)
+
+                loss_val, _4 = model.feat_3d_net_loss(att, next_triplet)  # also returns the endpoints
+                
             # Use the gradient tape to automatically retrieve
             # the gradients of the trainable variables with respect to the loss.
-            grads = tape.gradient(loss_val, model.trainable_weights)
+            grads = tape_train.gradient(loss_val, model.trainable_weights)
 
             # Run one step of gradient descent by updating
             # the value of the variables to minimize the loss.
             optimizer.apply_gradients(zip(grads, model.trainable_weights))
 
+            logger.info("Loss at epoch {} step {}: {}".format(iEpoch, step, loss_val.numpy()))
+
             with train_writer.as_default():
                 tf.summary.scalar("Loss", loss_val)
 
-            logger.info("Loss at epoch {} step {}: {}".format(iEpoch, step, loss_val))
-            
             '''
             below is not used...
             # result = model.train_on_batch([anchors, positives, negatives])
@@ -294,9 +313,6 @@ if __name__ == '__main__':
 
     gpu_string = '/gpu:{}'.format(args.gpu)
     config.gpu_options.allow_growth = True
-
-    # Disable eager execution for compatibility with the rest of the Tf1 code:
-    tf.compat.v1.disable_eager_execution()
 
     with tf.device(gpu_string):
         train()
