@@ -96,7 +96,7 @@ def log_arguments():
     s = 'Arguments:\n' + s
     logger.info(s)
 
-@tf.function
+# @tf.function
 def train():
 
     ### BEGIN INIT STUFF ###
@@ -125,8 +125,9 @@ def train():
 
     # Hardcode to get tf2 model
     model = Feat3dNet(True, param=param)
-    model.compile(optimizer=tf.keras.optimizers.Adam(1e-5),
-                    loss=model.feat_3d_net_loss)    # Unsure what 'metrics' to apply here
+    optimizer = tf.keras.optimizers.Adam(1e-5)
+    # model.compile(optimizer=tf.keras.optimizers.Adam(1e-5), loss=model.feat_3d_net_loss)    
+    # Unsure what 'metrics' to apply here
 
     # init model
     model_find = tf.train.latest_checkpoint(checkpoint_dir)
@@ -134,7 +135,7 @@ def train():
         model.load_weights(model_find)
         logger.info('Restored weights from {}.'.format(model_find))
     else:
-        logger.info('Unable to find a latest checkpoint in {}'.format(checkpoint_dir))
+        logger.info('Unable to find a latest checkpoint in {}.'.format(checkpoint_dir))
     
     # init summary writers
     logger.info('Summaries will be stored in: %s', args.log_dir)
@@ -159,20 +160,36 @@ def train():
             anchors, positives, negatives = train_data.next_triplet(k=BATCH_SIZE,
                                                                     num_points=args.num_points,
                                                                     augmentation=train_augmentations)
+            next_triplet = [anchors, positives, negatives]
+            
             if anchors is None or anchors.shape[0] != BATCH_SIZE:
                 break
             
             # Training
-            result = model.train_on_batch([anchors, positives, negatives])
-            metrics_names = model.metrics_names
+            with tf.GradientTape() as tape:
+                # Run forward pass
+                _, _, att, _ = model(next_triplet, training=True)
+
+                loss_val = model.feat_3d_net_loss(att, next_triplet)
             
-            logger.info("Train: ")
-            for i in range(len(metrics_names)):
-                logger.info("{}={}".format(metrics_names[i], result[i]))
+            # Use the gradient tape to automatically retrieve
+            # the gradients of the trainable variables with respect to the loss.
+            grads = tape.gradient(loss_val, model.trainable_weights)
+
+            # Run one step of gradient descent by updating
+            # the value of the variables to minimize the loss.
+            optimizer.apply_gradients(zip(grads, model.trainable_weights))
 
             with train_writer.as_default():
-                for i in range(len(metrics_names)):
-                    tf.summary.scalar(metrics_names[i], result[i])
+                tf.summary.scalar("Loss", loss_val)
+
+            logger.info("Loss at epoch {} step {}: {}".format(iEpoch, step, loss_val))
+            
+            '''
+            below is not used...
+            # result = model.train_on_batch([anchors, positives, negatives])
+            # metrics_names = model.metrics_names
+            '''
                 
             if step % args.checkpoint_every_n_steps == 0:
                 savepath = checkpoint_dir + "_{}".format(step)
