@@ -31,7 +31,7 @@ class PairwiseDist(tf.keras.layers.Layer):
         return dist
 """
 
-@tf.function
+# @tf.function
 def pairwise_dist(A: tf.Tensor, B: tf.Tensor) -> tf.Tensor:
     ''' Computes pairwise distance
     :param A: (B x N x D) containing descriptors of A
