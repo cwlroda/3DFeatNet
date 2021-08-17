@@ -5,7 +5,7 @@ import tensorflow as tf
 # from tensorflow.python.ops.numpy_ops.np_math_ops import positive
 
 from models.pointnet_common import sample_points, sample_and_group, sample_and_group_all, query_and_group_points
-from models.layers_tf2 import pairwise_dist, MaxPoolAxis, MaxPoolConcat
+from models.layers_tf2 import pairwise_dist, MaxPoolAxis, MaxPoolConcat, Conv2D_BN
 
 class PointnetSaModule(tf.Module):
     """ PointNet Set Abstraction (SA) Module. Modified to remove unneeded components (e.g. pooling),
@@ -28,43 +28,29 @@ class PointnetSaModule(tf.Module):
         # Initialise layers
         self.layers = []
         
-        # Define mlp layers based on input dimension
+        # Define MLP layers based on input dimensions
         for i, num_out_channel in enumerate(mlp):
-            self.layers.append( tf.keras.layers.Conv2D( num_out_channel, kernel_size=[1,1], strides=[1,1],
-                                        padding="valid", name='conv_%d' %(i), activation='relu'
-                                        )
-                              )
-            if bn:
-                # TODO figure out the appropriate axis. Rest are set to default.
-                self.layers.append( tf.keras.layers.BatchNormalization( axis=-1, name='bn_%d' %(i) ) )
-
-        # Max pool, then concatenate
-        self.layers.append( MaxPoolConcat() ) # Custom layer pooling only on one axis then tiling then concat
+            self.layers.append(
+                Conv2D_BN(num_out_channel, [1,1], bn, padding='valid', name='conv_%d' %i)
+            )
+        
+        self.layers.append(MaxPoolConcat())
 
         if mlp2 is not None:
             for i, num_out_channel in enumerate(mlp2):
-                self.layers.append( tf.keras.layers.Conv2D( num_out_channel, kernel_size=[1,1], strides=[1,1],
-                                        padding="valid", name='conv_mid_%d' %(i),
-                                        activation=tf.nn.relu if (final_relu or i < len(mlp2) - 1) else None
-                                        )
-                                  )
-                if bn:
-                    # TODO figure out the appropriate axis. Rest are set to default.
-                    self.layers.append( tf.keras.layers.BatchNormalization( axis=-1, name='bn_mid_%d' %(i) ) )
+                self.layers.append(
+                    Conv2D_BN(num_out_channel, [1,1], bn, padding='valid', name='conv_mid_%d' %i,
+                            activation='relu' if (final_relu or i<len(mlp2) - 1) else None)
+                )
         
-        # Max pool again
-        self.layers.append( MaxPoolAxis() )
+        self.layers.append(MaxPoolAxis())
 
         if mlp3 is not None:
             for i, num_out_channel in enumerate(mlp3):
-                self.layers.append( tf.keras.layers.Conv2D( num_out_channel, kernel_size=[1,1], strides=[1,1],
-                                        padding="valid", name='conv_post_%d' %(i),
-                                        activation=tf.nn.relu if (final_relu or i < len(mlp2) - 1) else None
-                                        )
-                                  )
-                if bn:
-                    # TODO figure out the appropriate axis. Rest are set to default.
-                    self.layers.append( tf.keras.layers.BatchNormalization( axis=-1, name='bn_post_%d' %(i) ) )
+                self.layers.append(
+                    Conv2D_BN(num_out_channel, [1,1], bn, padding='valid', name='conv_post_%d' %i,
+                            activation='relu' if (final_relu or i<len(mlp3) - 1) else None)
+                )
 
     @tf.Module.with_name_scope
     def __call__(self, xyz: tf.Tensor, points: tf.Tensor, npoint: int, radius: float, nsample,
@@ -111,11 +97,9 @@ class PointnetSaModule(tf.Module):
 
 class FeatureDetectionModule(tf.Module):
     """Detect features in point cloud.
-    
-    `compute_det_gradients` is experimental?
     """
 
-    def __init__(self, mlp, mlp2, name, bn=True):
+    def __init__(self, mlp, mlp2, name="FeatureDetectionModule", bn=True):
         """
         Args:
         mlp: list of int32 -- output size for MLP on each point
@@ -131,28 +115,20 @@ class FeatureDetectionModule(tf.Module):
         self.end_points['gradients']['det'] = {}
 
         self.layers = []
-        
-        # Define mlp layers based on input dimension
+        # Pre pooling MLP
         for i, num_out_channel in enumerate(mlp):
-            self.layers.append( tf.keras.layers.Conv2D( num_out_channel, kernel_size=[1,1], strides=[1,1],
-                                        padding="valid", name='conv_%d' %(i), activation='relu' )
-                              )
-            if bn:
-                # TODO figure out the appropriate axis. Rest are set to default.
-                self.layers.append( tf.keras.layers.BatchNormalization( axis=-1, name='bn_%d' %(i) ) )
-
+            self.layers.append(
+                Conv2D_BN(num_out_channel, [1,1], bn, padding='valid', name="conv_%d" %i)
+            )
+        
         # Max pool, then concatenate
         self.layers.append( MaxPoolAxis() ) # Custom layer pooling only on one axis then tiling then concat
-
+        
         if mlp2 is not None:
             for i, num_out_channel in enumerate(mlp2):
-                self.layers.append( tf.keras.layers.Conv2D( num_out_channel, kernel_size=[1,1], strides=[1,1],
-                                        padding="valid", name='conv_mid_%d' %(i)
-                                    )
-                                  )
-                if bn:
-                    # TODO figure out the appropriate axis. Rest are set to default.
-                    self.layers.append( tf.keras.layers.BatchNormalization( axis=-1, name='bn_mid_%d' %(i) ) )
+                self.layers.append(
+                    Conv2D_BN(num_out_channel, [1,1], bn, padding='valid', name="conv_post_%d" %i)
+                )
 
         # Two "endpoints" of the calculation
         self.attention = tf.keras.layers.Conv2D(1, kernel_size=[1,1], strides=[1,1], padding='valid',
@@ -185,49 +161,30 @@ class FeatureDetectionModule(tf.Module):
         new_points, idx = query_and_group_points(xyz, points, new_xyz, num_samples, radius, knn=False, 
                             use_xyz=True, normalize_radius=True, orientations=None)  # Extract clusters
 
-        last_layer = 0
-
-        # TODO resolve gradients returning None
         for layer in self.layers:
+            # TODO Check for the shapes' correctness compared to the 3dFeatNet Paper and also the previous model
+            print(">>> Layer", layer.name)
+            print(">>> Shape of input points:", new_points.shape)
             new_points = layer(new_points, training=is_training)
-                    
-            '''
-            TODO
-            This probably doesn't work because somehow the calc is going out of TensorFlow.
-            Or perhaps, we are attempting to watch tf.Tensors when tf.GradientTape can only watch
-            for tf.Variables.
-            Hence, we need to refactor the code such that this is supported.
-
-            with tf.GradientTape(watch_accessed_variables=True) as tape_det:
-                tape_det.watch([xyz, new_points, new_xyz, layer.trainable_weights])
-                print(layer.name)
-                new_points = layer(new_points, training=is_training)
-        
-                grad = tape_det.gradient(new_points, xyz)
-                if layer.name[:4] == "conv" and compute_det_gradients:
-                    # print(tape_det.watched_variables())
-                    print('Gradients | det |', last_layer,':', grad)
-
-                    self.end_points['gradients']['det']['mlp_{}'.format(last_layer)] = grad
-                    last_layer += 1
-            '''
+            print(">>> Shape of output points:", new_points.shape)
 
         # Attention and orientation regression
         attention_out = self.attention(new_points)
+        # print(">>> Attention_out shape:", attention_out.shape)
         attention = tf.squeeze(attention_out, axis=[2, 3])
 
         orientation_xy = self.orientation(new_points)
+        # print(">>> Orientation_xy shape:", orientation_xy.shape)
         orientation_xy = tf.squeeze(orientation_xy, axis=2)
-        orientation_xy = tf.nn.l2_normalize(orientation_xy, axis=2, epsilon=1e-8)
+        orientation_xy = tf.nn.l2_normalize(orientation_xy, dim=2, epsilon=1e-8)
         orientation = tf.atan2(orientation_xy[:, :, 1], orientation_xy[:, :, 0])
 
         return new_xyz, idx, attention, orientation, self.end_points
 
-
 class FeatureExtractionModule(PointnetSaModule):
     """ Extract feature descriptors """
 
-    def __init__(self, mlp, mlp2, mlp3, name="layer1", bn=True):
+    def __init__(self, mlp, mlp2, mlp3, name="FeatureExtractionModule", bn=True):
         '''
         Args:
         is_training (tf.placeholder): Set to True if training, False during evaluation
@@ -240,8 +197,9 @@ class FeatureExtractionModule(PointnetSaModule):
         )
     
     @tf.Module.with_name_scope
-    def __call__(self, l0_xyz: tf.Tensor, l0_points: tf.Tensor, 
-                radius, num_samples, keypoints, orientations, is_training):
+    def __call__(self, l0_xyz: tf.Tensor, l0_points: tf.Tensor, keypoints, orientations, 
+                is_training,
+                radius=2.0, num_samples=64):
         '''
         Args:
         l0_xyz (tf.Tensor): Input point cloud of size (batch_size, ndataset, 3)
@@ -262,7 +220,7 @@ class FeatureExtractionModule(PointnetSaModule):
             orientations=orientations, normalize_radius=True
         )
 
-        features = tf.nn.l2_normalize(l1_points, axis=2, epsilon=1e-8)
+        features = tf.nn.l2_normalize(l1_points, dim=2, epsilon=1e-8)
         
         return l1_xyz, features, end_points
 
@@ -406,6 +364,47 @@ class Feat3dNetTrain(Feat3dNetInference):
 
         return xyz, features, anchor_attention, self.end_points
 
+# class AttentionWeightedAlignmentLoss(tf.keras.losses.Loss):
+#     def call(self, y_true, y_pred):
+#         """ 
+#         Computes the attention weighted alignment loss as described in our paper.
+
+#         Args:
+#             y_true: Attention from anchor point clouds
+#             y_pred: List of [anchor_features, positive_features, negative_features]
+
+#         Returns:
+#             loss (tf.Tensor scalar)
+#         """
+#         anchors = y_pred[0]
+#         positives = y_pred[1]
+#         negatives = y_pred[2]
+
+#         # Computes for each feature of the anchor, the distance to the nearest feature in the positive and negative
+#         positive_dist = pairwise_dist(anchors, positives)
+#         negative_dist = pairwise_dist(anchors, negatives)
+#         best_positive = tf.reduce_min(positive_dist, axis=2)
+#         best_negative = tf.reduce_min(negative_dist, axis=2)
+ 
+#         if not self.param['Attention']:
+#             sum_positive = tf.reduce_mean(best_positive, 1)
+#             sum_negative = tf.reduce_mean(best_negative, 1)
+#         else:
+#             attention_sm = y_true / tf.reduce_sum(y_true, axis=1)[:, None]
+#             sum_positive = tf.reduce_sum(attention_sm * best_positive, 1)
+#             sum_negative = tf.reduce_sum(attention_sm * best_negative, 1)
+
+#             # tf.compat.v1.summary.histogram('normalized_attention', attention_sm)
+#             tf.summary.histogram("normalized_attention", attention_sm)
+#             # self.Network.end_points['normalized_attention'] = attention_sm
+# # 
+#         # self.Network.end_points['sum_positive'] = sum_positive
+#         # self.Network.end_points['sum_negative'] = sum_negative
+#         triplet_cost = tf.maximum(0., sum_positive - sum_negative + self.param['margin'])
+
+#         loss = tf.reduce_mean(triplet_cost)
+
+#         return loss
 
 class Feat3dNet(tf.keras.Model):
     def __init__(self, train_or_infer, name="3DFeatNet", param=None):
@@ -504,4 +503,5 @@ class Feat3dNet(tf.keras.Model):
 
         loss = tf.reduce_mean(triplet_cost)
 
-        return loss, self.Network.end_points
+        return loss
+        # return loss, self.Network.end_points
