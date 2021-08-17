@@ -174,7 +174,7 @@ class FeatureDetectionModule(tf.Module):
         orientation_xy = self.orientation(new_points)
         # print(">>> Orientation_xy shape:", orientation_xy.shape)
         orientation_xy = tf.squeeze(orientation_xy, axis=2)
-        orientation_xy = tf.nn.l2_normalize(orientation_xy, dim=2, epsilon=1e-8)
+        orientation_xy = tf.nn.l2_normalize(orientation_xy, axis=2, epsilon=1e-8)
         orientation = tf.atan2(orientation_xy[:, :, 1], orientation_xy[:, :, 0])
 
         return new_xyz, idx, attention, orientation, self.end_points
@@ -218,7 +218,8 @@ class FeatureExtractionModule(PointnetSaModule):
             orientations=orientations, normalize_radius=True
         )
 
-        features = tf.nn.l2_normalize(l1_points, dim=2, epsilon=1e-8)
+        features = tf.nn.l2_normalize(l1_points, axis=2, epsilon=1e-8)
+        # dim is deprecated, use axis instead 
         
         return l1_xyz, features, end_points
 
