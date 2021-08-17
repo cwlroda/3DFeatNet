@@ -14,15 +14,12 @@ Things to try tomorrow:
 
 
 import argparse
-from re import L
 import coloredlogs, logging
 import logging.config
 import numpy as np
 import os
 import sys
 import tensorflow as tf
-from tensorflow.python.keras import metrics, optimizers
-from tensorflow.python.ops.numpy_ops.np_math_ops import negative, positive
 
 # from models import feat3dnet_tf2
 # from models.net_factory import get_network
@@ -204,7 +201,7 @@ def train():
             loss_val = None
 
             with tf.GradientTape() as tape_train:
-                # tape_train.watch([loss_val, model.trainable_weights])
+                tape_train.watch([model.trainable_weights])
 
                 # Run forward pass
                 _1, features, att, _3 = model(next_triplet, training=True)
@@ -214,11 +211,14 @@ def train():
             
             # print(">>>Features:", features)
             # print(">>> Attention:", att)
-            # print(">>> Loss:", loss_val)        # It can be seen that stuff is happening here...
 
             # Use the gradient tape to automatically retrieve
             # the gradients of the trainable variables with respect to the loss.
             grads = tape_train.gradient(loss_val, model.trainable_weights)
+            print(">>> Loss:", loss_val)        # It can be seen that stuff is happening here...
+            print(">>> Gradients:")
+            for e in zip(grads, model.trainable_weights):
+                print(">>> {} | {}".format(e[1].name, e[0]))
 
             # Run one step of gradient descent by updating
             # the value of the variables to minimize the loss.
