@@ -1,3 +1,18 @@
+'''
+
+Things to try tomorrow:
+
+- Run the old 3DFeatNet code on TF1 and inspect all layers (input/output sizes)
+- Re-read the 3DFeatNet paper to double-check understanding on certain things
+
+- Read through the 3DFeatNet code to see if there's anything i missed in terms of gradient calculation
+
+- Read up on custom Layers and if i need to add in any custom loss things to each layer
+- Watch Conv net tutorial
+
+'''
+
+
 import argparse
 from re import L
 import coloredlogs, logging
@@ -124,12 +139,13 @@ def train():
 
     # Hardcode to get tf2 model
     model = Feat3dNet(True, param=param)
+    loss_fn = model.feat_3d_net_loss
     optimizer = tf.keras.optimizers.Adam(1e-5)
     
     # Need to put in a dummy input to initialize the model.
-    model.build( 3 * [ tf.TensorShape([BATCH_SIZE, args.num_points, args.data_dim]) ] )
-    # rand_input = [tf.random.normal([BATCH_SIZE, args.num_points, args.data_dim])] * 3
-    # model(rand_input, True)
+    # model.build( 3 * [ tf.TensorShape([BATCH_SIZE, args.num_points, args.data_dim]) ] )
+    rand_input = [tf.random.normal([BATCH_SIZE, args.num_points, args.data_dim])] * 3
+    model(rand_input, True)
 
     # model.compile(optimizer=optimizer, loss=model.feat_3d_net_loss)    
     # Unsure what 'metrics' to apply here
@@ -158,7 +174,7 @@ def train():
         len(model.trainable_weights)
     ))
 
-    # model.summary()
+    model.summary(print_fn=logger.info)
     # input(">>>Continue?<<<") # i love breakpoints
     ### END INIT STUFF ###
 
@@ -183,14 +199,23 @@ def train():
             # loss_val = tf.zeros(shape=1, dtype=tf.float32, name="LOSS")
             
             # Training
-            with tf.GradientTape(watch_accessed_variables=True) as tape_train:
+            features = None
+            att = None
+            loss_val = None
+
+            with tf.GradientTape() as tape_train:
                 # tape_train.watch([loss_val, model.trainable_weights])
 
                 # Run forward pass
-                _1, _2, att, _3 = model(next_triplet, training=True)
-
-                loss_val, _4 = model.feat_3d_net_loss(att, next_triplet)  # also returns the endpoints
+                _1, features, att, _3 = model(next_triplet, training=True)
                 
+                loss_val = loss_fn(att, next_triplet)
+                # loss_val, _4 = model.feat_3d_net_loss(att, next_triplet)  # also returns the endpoints
+            
+            # print(">>>Features:", features)
+            # print(">>> Attention:", att)
+            # print(">>> Loss:", loss_val)        # It can be seen that stuff is happening here...
+
             # Use the gradient tape to automatically retrieve
             # the gradients of the trainable variables with respect to the loss.
             grads = tape_train.gradient(loss_val, model.trainable_weights)
