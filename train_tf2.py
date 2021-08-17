@@ -187,19 +187,19 @@ def train():
                                                                     num_points=args.num_points,
                                                                     augmentation=train_augmentations)
             next_triplet = [anchors, positives, negatives]
-            # logger.info("Shape of next_triplet is {}.".format(next_triplet.shape))
 
             if anchors is None or anchors.shape[0] != BATCH_SIZE:
                 break
             
+            # visualise input data
+            print(anchors.shape)    # 6, 4096, 6 for now
+            # print(anchors[:5])
+            # print(positives[:5])
+            # print(negatives[:5])
             # loss_val = tf.zeros(shape=1, dtype=tf.float32, name="LOSS")
             
             # Training
-            features = None
-            att = None
-            loss_val = None
-
-            with tf.GradientTape() as tape_train:
+            with tf.GradientTape(persistent=True) as tape_train:
                 tape_train.watch([model.trainable_weights])
 
                 # Run forward pass
@@ -209,6 +209,12 @@ def train():
                 loss_val = loss_fn(att, next_triplet)
             
             print(">>> Loss:", loss_val)        # It can be seen that stuff is happening here...
+            grads = tape_train.gradient(loss_val, model.trainable_weights)
+            print(">>> Individual gradients:")
+            for e in zip(grads, model.trainable_weights):
+                print(">>> {} | {}".format(e[1].name, e[0]))
+            
+            # Returns None?
             optimizer.minimize(loss_val, model.trainable_weights, tape=tape_train)
 
             # Same as above, only more verbose.
@@ -218,11 +224,7 @@ def train():
 
             # Use the gradient tape to automatically retrieve
             # the gradients of the trainable variables with respect to the loss.
-            grads = tape_train.gradient(loss_val, model.trainable_weights)
             print(">>> Loss:", loss_val)        # It can be seen that stuff is happening here...
-            print(">>> Gradients:")
-            for e in zip(grads, model.trainable_weights):
-                print(">>> {} | {}".format(e[1].name, e[0]))
 
             # Run one step of gradient descent by updating
             # the value of the variables to minimize the loss.
