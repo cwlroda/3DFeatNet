@@ -353,47 +353,49 @@ class Feat3dNetTrain(Feat3dNetInference):
 
         return xyz, features, anchor_attention, self.end_points
 
-# class AttentionWeightedAlignmentLoss(tf.keras.losses.Loss):
-#     def call(self, y_true, y_pred):
-#         """ 
-#         Computes the attention weighted alignment loss as described in our paper.
+class AttentionWeightedAlignmentLoss(tf.keras.losses.Loss):
+    def __init__(self, attention: bool, margin: float):
+        super().__init__()
+        self.attention = attention
+        self.margin = margin
 
-#         Args:
-#             y_true: Attention from anchor point clouds
-#             y_pred: List of [anchor_features, positive_features, negative_features]
+    def call(self, y_true, y_pred):
+        """ 
+        Computes the attention weighted alignment loss as described in our paper.
 
-#         Returns:
-#             loss (tf.Tensor scalar)
-#         """
-#         anchors = y_pred[0]
-#         positives = y_pred[1]
-#         negatives = y_pred[2]
+        Args:
+            y_true: Attention from anchor point clouds
+            y_pred: List of [anchor_features, positive_features, negative_features]
 
-#         # Computes for each feature of the anchor, the distance to the nearest feature in the positive and negative
-#         positive_dist = pairwise_dist(anchors, positives)
-#         negative_dist = pairwise_dist(anchors, negatives)
-#         best_positive = tf.reduce_min(positive_dist, axis=2)
-#         best_negative = tf.reduce_min(negative_dist, axis=2)
+        Returns:
+            loss (tf.Tensor scalar)
+        """
+        anchors = y_pred[0]
+        positives = y_pred[1]
+        negatives = y_pred[2]
+
+        # Computes for each feature of the anchor, the distance to the nearest feature in the positive and negative
+        positive_dist = pairwise_dist(anchors, positives)
+        negative_dist = pairwise_dist(anchors, negatives)
+        best_positive = tf.reduce_min(positive_dist, axis=2)
+        best_negative = tf.reduce_min(negative_dist, axis=2)
  
-#         if not self.param['Attention']:
-#             sum_positive = tf.reduce_mean(best_positive, 1)
-#             sum_negative = tf.reduce_mean(best_negative, 1)
-#         else:
-#             attention_sm = y_true / tf.reduce_sum(y_true, axis=1)[:, None]
-#             sum_positive = tf.reduce_sum(attention_sm * best_positive, 1)
-#             sum_negative = tf.reduce_sum(attention_sm * best_negative, 1)
+        if not self.attention:
+            sum_positive = tf.reduce_mean(best_positive, 1)
+            sum_negative = tf.reduce_mean(best_negative, 1)
+        else:
+            attention_sm = y_true / tf.reduce_sum(y_true, axis=1)[:, None]
+            sum_positive = tf.reduce_sum(attention_sm * best_positive, 1)
+            sum_negative = tf.reduce_sum(attention_sm * best_negative, 1)
 
-#             # tf.compat.v1.summary.histogram('normalized_attention', attention_sm)
-#             tf.summary.histogram("normalized_attention", attention_sm)
-#             # self.Network.end_points['normalized_attention'] = attention_sm
-# # 
-#         # self.Network.end_points['sum_positive'] = sum_positive
-#         # self.Network.end_points['sum_negative'] = sum_negative
-#         triplet_cost = tf.maximum(0., sum_positive - sum_negative + self.param['margin'])
+            tf.summary.histogram("normalized_attention", attention_sm)
+            # self.Network.end_points['normalized_attention'] = attention_sm
 
-#         loss = tf.reduce_mean(triplet_cost)
+        triplet_cost = tf.maximum(0., sum_positive - sum_negative + self.margin)
 
-#         return loss
+        loss = tf.reduce_mean(triplet_cost)
+
+        return loss
 
 class Feat3dNet(tf.keras.Model):
     def __init__(self, train_or_infer, name="3DFeatNet", param=None):
@@ -434,7 +436,7 @@ class Feat3dNet(tf.keras.Model):
 
         ext_mlps = {'mlp': mlp, 'mlp2': mlp2, 'mlp3': mlp3}
 
-        self.logger.info('Descriptor MLP sizes: {} | {} | {}'.format(mlp, mlp2, mlp3))
+        self.logger.info('Description MLP sizes: {} | {} | {}'.format(mlp, mlp2, mlp3))
 
         self.train_or_infer = train_or_infer
         if train_or_infer: 
@@ -453,7 +455,7 @@ class Feat3dNet(tf.keras.Model):
 
             return self.Network(anchors, positives, negatives, training)
         else:
-            point_cloud = inputs
+            point_cloud = inputs[0]
             # point_cloud = inputs['point_cloud']
 
             return self.Network(point_cloud, training)
