@@ -7,31 +7,7 @@ Tf2 refactor attempt by TianYi
 '''
 
 import tensorflow as tf
-import tf_slim as slim  # tensorflow.contrib.slim is deprecated.
 
-# Uncomment this if a Layer is required, not an operation.
-"""
-class PairwiseDist(tf.keras.layers.Layer):
-    ''' Computes pairwise distance
-
-    :param A: (B x N x D) containing descriptors of A
-    :param B: (B x N x D) containing descriptors of B
-    :return: (B x N x N) tensor. Element[i,j,k] denotes the distance between the jth descriptor in ith model of A,
-             and kth descriptor in ith model of B
-    '''
-
-    def __init__(self):
-        super(PairwiseDist, self).__init__()
-
-    def call(self, A, B):
-        A = tf.expand_dims(A, 2)
-        B = tf.expand_dims(B, 1)
-        dist = tf.reduce_sum(tf.math.squared_difference(A, B), 3)
-
-        return dist
-"""
-
-# @tf.function
 def pairwise_dist(A: tf.Tensor, B: tf.Tensor) -> tf.Tensor:
     ''' Computes pairwise distance
     :param A: (B x N x D) containing descriptors of A
@@ -67,12 +43,45 @@ class MaxPoolConcat(tf.keras.layers.Layer):
         super(MaxPoolConcat, self).__init__(name="MaxPoolConcat")
         self.maxPoolAxis = MaxPoolAxis(axis)
 
-    def call(self, input_pts):
-        pooled = self.maxPoolAxis.call(input_pts)
-        pooled_expand = tf.tile(pooled, [1, 1, input_pts.shape[2], 1])
-        new_points = tf.concat((input_pts, pooled_expand), axis=3)
+    def call(self, input_pts: tf.Variable):
+        pooled = self.maxPoolAxis(input_pts)
+        pooled_tile = tf.tile(pooled, [1, 1, input_pts.shape[2], 1])
+        pooled_out = tf.concat((input_pts, pooled_tile), axis=3)
 
-        return new_points
+        return pooled_out
+
+# Implements the conv2d with BN operation as found in feature_detection_module in the original code
+# Perhaps losses need to be implemented here with the add_loss() method
+class Conv2D_BN(tf.keras.layers.Layer):
+    def __init__(self, filters, kernel_size, bn=True, stride=[1,1], padding='same', 
+                activation='relu', name='conv2d_bn'):
+        super(Conv2D_BN, self).__init__(name=name)
+        
+        self.conv = tf.keras.layers.Conv2D(filters, kernel_size, stride, padding, 
+                                    activation=None if bn else activation)
+
+        self.bn = None
+        self.activ = None
+        
+        if bn:
+            self.bn = tf.keras.layers.BatchNormalization( axis=-1, name='bn')
+
+            if activation is not None:
+                self.activ = tf.keras.layers.Activation(activation, name='activ_%s' %activation)
+
+    def call(self, inp:tf.Variable, training=True):
+        conv_out = self.conv(inp, training=training)
+        # self.input_shape = self.conv.input_shape
+        # self.output_shape = self.conv.output_shape
+
+        if self.bn is not None:
+            bn_out = self.bn(conv_out, training=training)
+            # self.output_shape = self.bn.output_shape
+        if self.activ is not None:
+            bn_out = self.activ(bn_out, training=training)
+            # self.output_shape = self.activ.output_shape
+        
+        return bn_out
 
 def _variable_on_cpu(name, shape, initializer, use_fp16=False):
     """Helper to create a Variable stored on CPU memory.
