@@ -23,7 +23,7 @@ import tensorflow as tf
 
 # from models import feat3dnet_tf2
 # from models.net_factory import get_network
-from models.feat3dnet_tf2 import Feat3dNet
+from models.feat3dnet_tf2 import Feat3dNet, AttentionWeightedAlignmentLoss
 
 from config import *
 from data.datagenerator import DataGenerator
@@ -136,7 +136,7 @@ def train():
 
     # Hardcode to get tf2 model
     model = Feat3dNet(True, param=param)
-    loss_fn = model.feat_3d_net_loss
+    loss_fn = AttentionWeightedAlignmentLoss(param['Attention'], param['margin'])
     optimizer = tf.keras.optimizers.Adam(1e-5)
     
     # Need to put in a dummy input to initialize the model.
@@ -165,13 +165,12 @@ def train():
     logger.info('Training Batch size: %i, validation batch size: %i', BATCH_SIZE, VAL_BATCH_SIZE)
     logger.info("TF Executing Eagerly? {}".format(tf.executing_eagerly() ))  # Shld be true
 
-    logger.info("Model has {} trainable weights, for example {} [5/{}].".format(
-        len(model.trainable_weights),
-        [w.name for w in model.trainable_weights[:5]],
-        len(model.trainable_weights)
-    ))
+    # debug stuff here
+    # print("Model has {} trainable weights".format(len(model.trainable_weights)))
+    # for w in model.trainable_weights:
+    #     print(w.name, w.shape, w.dtype)
 
-    model.summary(print_fn=logger.info)
+    # model.summary(print_fn=logger.info)
     # input(">>>Continue?<<<") # i love breakpoints
     ### END INIT STUFF ###
 
@@ -206,9 +205,14 @@ def train():
                 # Run forward pass
                 _1, features, att, _3 = model(next_triplet, training=True)
                 
+                # loss_val = model.feat_3d_net_loss(att, next_triplet)
                 loss_val = loss_fn(att, next_triplet)
-                # loss_val, _4 = model.feat_3d_net_loss(att, next_triplet)  # also returns the endpoints
             
+            print(">>> Loss:", loss_val)        # It can be seen that stuff is happening here...
+            optimizer.minimize(loss_val, model.trainable_weights, tape=tape_train)
+
+            # Same as above, only more verbose.
+            '''
             # print(">>>Features:", features)
             # print(">>> Attention:", att)
 
@@ -222,9 +226,10 @@ def train():
 
             # Run one step of gradient descent by updating
             # the value of the variables to minimize the loss.
-            optimizer.apply_gradients(zip(grads, model.trainable_weights))
+            # optimizer.apply_gradients(zip(grads, model.trainable_weights))
 
             logger.info("Loss at epoch {} step {}: {}".format(iEpoch, step, loss_val.numpy()))
+            '''
 
             with train_writer.as_default():
                 tf.summary.scalar("Loss", loss_val)
