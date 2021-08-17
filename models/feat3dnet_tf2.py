@@ -111,10 +111,8 @@ class FeatureDetectionModule(tf.Module):
         super(FeatureDetectionModule, self).__init__(name=name)
 
         self.end_points = {}
-        self.end_points['gradients'] = {}
-        self.end_points['gradients']['det'] = {}
-
         self.layers = []
+
         # Pre pooling MLP
         for i, num_out_channel in enumerate(mlp):
             self.layers.append(
@@ -139,7 +137,7 @@ class FeatureDetectionModule(tf.Module):
                                                     name='orientation' )
     
     @tf.Module.with_name_scope
-    def __call__(self, xyz, points, num_clusters, radius, is_training, num_samples=64, compute_det_gradients=True):
+    def __call__(self, xyz, points, num_clusters, radius, is_training, num_samples=64):
         """
         Args:
         xyz (tf.Tensor): Input point cloud of size (batch_size, ndataset, 3)
@@ -148,13 +146,13 @@ class FeatureDetectionModule(tf.Module):
         radius (float): Radius to consider for feature detection
         num_samples: Maximum number of points to consider per cluster
         is_training (bool): train or inference
-        compute_det_gradients (bool): if gradients are meant to be calculated
 
         Returns:
         new_xyz: Cluster centers
         idx: Indices of points sampled for the clusters
         attention: Output attention weights
         orientation: Output orientation (radians)
+        end_points: Unused
         """
 
         new_xyz = sample_points(xyz, num_clusters)  # Sample point centers
@@ -163,10 +161,10 @@ class FeatureDetectionModule(tf.Module):
 
         for layer in self.layers:
             # TODO Check for the shapes' correctness compared to the 3dFeatNet Paper and also the previous model
-            print(">>> Layer", layer.name)
-            print(">>> Shape of input points:", new_points.shape)
+            # print(">>> Layer", layer.name)
+            # print(">>> Shape of input points:", new_points.shape)
             new_points = layer(new_points, training=is_training)
-            print(">>> Shape of output points:", new_points.shape)
+            # print(">>> Shape of output points:", new_points.shape)
 
         # Attention and orientation regression
         attention_out = self.attention(new_points)
@@ -265,19 +263,15 @@ class Feat3dNetInference(tf.Module):
         self.end_points = {}
     
     @tf.Module.with_name_scope
-    def __call__(self, point_cloud, is_training, compute_det_gradients=True):
+    def __call__(self, point_cloud, is_training):
         '''
         Args:
             point_cloud (tf.Tensor): Input point clouds of size (batch_size, ndataset, 3).
             is_training (bool): Training or Inference
-            compute_det_gradients (bool): Whether to compute and output gradients for the the Detection stage.
 
         Returns:
             xyz, features, attention, end_points
         '''
-
-        #TODO Change if reqd
-        compute_det_gradients = is_training
 
         l0_xyz = point_cloud[:, :, :3]
         # Check that the dimension is correct
@@ -287,7 +281,7 @@ class Feat3dNetInference(tf.Module):
 
         keypoints, idx, attention, orientation, end_points_temp = \
             self.Detection(l0_xyz, l0_points, self._num_clusters, self._radius, 
-                            is_training, self._num_samples, compute_det_gradients)
+                            is_training, self._num_samples)
 
         self.end_points.update(end_points_temp)
         self.end_points['keypoints'] = keypoints
@@ -332,35 +326,30 @@ class Feat3dNetTrain(Feat3dNetInference):
         super(Feat3dNetTrain, self).__init__(det_mlps, ext_mlps, param, name, bn)
     
     @tf.Module.with_name_scope
-    def __call__(self, anchors, positives, negatives, is_training, compute_det_gradients=True):
+    def __call__(self, anchors, positives, negatives, is_training):
         '''
         Args:
             anchors (tf.Tensor): Anchor point clouds of size (batch_size, ndataset, 3).
             positives (tf.Tensor): Positive point clouds, same size as anchors
             negatives (tf.Tensor): Negative point clouds, same size as anchors
             is_training (bool): Train vs infer
-            compute_det_gradients (bool): Whether to compute and output gradients for the the Detection stage.
         Returns:
             xyz, features, anchor_attention, end_points
         '''
-
-        #TODO Change if reqd
-        compute_det_gradients = is_training
 
         point_clouds = tf.concat([anchors, positives, negatives], axis=0)
         self.end_points['input_pointclouds'] = point_clouds
 
         xyz, features, attention, endpoints_temp = \
-            super(Feat3dNetTrain, self).__call__(point_clouds, is_training, compute_det_gradients)
+            super(Feat3dNetTrain, self).__call__(point_clouds, is_training)
 
         self.end_points['output_xyz'] = xyz
         self.end_points['output_features'] = features
         self.end_points.update(endpoints_temp)
 
-        xyz = tf.split(xyz, 3, axis=0, name="xyz")
-        features = tf.split(features, 3, axis=0, name="features")
-        anchor_attention = tf.split(attention, 3, axis=0, 
-            name="anchor_attention")[0] if attention is not None else None
+        xyz = tf.split(xyz, 3, axis=0)
+        features = tf.split(features, 3, axis=0)
+        anchor_attention = tf.split(attention, 3, axis=0)[0] if attention is not None else None
 
         return xyz, features, anchor_attention, self.end_points
 
@@ -431,7 +420,12 @@ class Feat3dNet(tf.keras.Model):
         self.param.update(param)
         self.logger.info('Model parameters: %s', self.param)
 
-        det_mlps = {'mlp': [64, 128, 256], 'mlp2': [128, 64]}
+        mlp = [64, 128, 256]
+        mlp2 = [128, 64]
+
+        det_mlps = {'mlp': mlp, 'mlp2': mlp2}
+
+        self.logger.info('Detection MLP sizes: {} | {} '.format(mlp, mlp2))
 
         # Descriptor extraction: Extract descriptors for each cluster
         mlp = [32, 64]
