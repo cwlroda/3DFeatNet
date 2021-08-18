@@ -1,3 +1,4 @@
+from config import BATCH_SIZE
 import logging
 import tensorflow as tf
 # from tensorflow._api.v2 import train
@@ -362,6 +363,7 @@ class AttentionWeightedAlignmentLoss(tf.keras.losses.Loss):
         self.attention = attention
         self.margin = margin
 
+    # @tf.function
     def call(self, y_true, y_pred):
         """ 
         Computes the attention weighted alignment loss as described in our paper.
@@ -373,28 +375,47 @@ class AttentionWeightedAlignmentLoss(tf.keras.losses.Loss):
         Returns:
             loss (tf.Tensor scalar)
         """
-        anchors = y_pred[0]
-        positives = y_pred[1]
-        negatives = y_pred[2]
+        # Simple stacking
+        # anchors = y_pred[0]
+        # positives = y_pred[1]
+        # negatives = y_pred[2]
+
+        # input is the same point cloud as to the model
+        anchors = y_pred[:BATCH_SIZE, :, :]
+        positives = y_pred[BATCH_SIZE:BATCH_SIZE*2, :, :]
+        negatives= y_pred[BATCH_SIZE*2:BATCH_SIZE*3, :, :]
+
+        b, n, m = anchors.shape
 
         # Computes for each feature of the anchor, the distance to the nearest feature in the positive and negative
         positive_dist = pairwise_dist(anchors, positives)
-        negative_dist = pairwise_dist(anchors, negatives)
+        print(">>> Shape from Loss", anchors.shape, positive_dist.shape)
         best_positive = tf.reduce_min(positive_dist, axis=2)
+        
+        print(">>> Shape after reduce_min", best_positive.shape)
+        assert positive_dist.shape==(b,n,n) # as per definition
+
+        del positive_dist   # hacky memory management
+
+        negative_dist = pairwise_dist(anchors, negatives)
         best_negative = tf.reduce_min(negative_dist, axis=2)
  
+        del negative_dist   # hacky memory management
+
         if not self.attention:
             sum_positive = tf.reduce_mean(best_positive, 1)
+            print(">>> Shape after reduce_mean", sum_positive.shape)
             sum_negative = tf.reduce_mean(best_negative, 1)
         else:
             attention_sm = y_true / tf.reduce_sum(y_true, axis=1)[:, None]
             sum_positive = tf.reduce_sum(attention_sm * best_positive, 1)
             sum_negative = tf.reduce_sum(attention_sm * best_negative, 1)
 
-            tf.summary.histogram("normalized_attention", attention_sm)
+            # tf.summary.histogram("normalized_attention", attention_sm)
             # self.Network.end_points['normalized_attention'] = attention_sm
 
         triplet_cost = tf.maximum(0., sum_positive - sum_negative + self.margin)
+        print(">>> Shape after max:", triplet_cost.shape)
 
         loss = tf.reduce_mean(triplet_cost)
 
@@ -514,7 +535,7 @@ class Feat3dNet(tf.keras.Model):
 
 
 class Feat3dNet_sequential(tf.keras.Model):
-    def __init__(self, train_or_infer, input_shape, name="3dFN_seq", param=None):
+    def __init__(self, train_or_infer, input_shape=None, name="3dFN_seq", param=None):
         """ Constructor: Creates the 3dFeatNet model by calling its relevant sub-objects.
 
         Args:
@@ -616,7 +637,7 @@ class Feat3dNet_sequential(tf.keras.Model):
             self.end_points['input_pointclouds'] = inputs
 
         l0_xyz = inputs[:,:,:3]
-        print(">>> Shape of input point cloud: ", l0_xyz.shape)
+        # self.logger.info(">>> Shape of input point cloud: ", l0_xyz.shape)
         l0_points = None    # Normal information not used in 3DFeat-Net
         
         ### Feature Detection Layer
@@ -627,11 +648,10 @@ class Feat3dNet_sequential(tf.keras.Model):
                             self._radius, knn=False, use_xyz=True, normalize_radius=True, 
                             orientations=None)
 
-        print(">>> Input shape to Sequential:", new_points.shape)
+        # self.logger.info(">>> Input shape to Sequential:", new_points.shape)
         
         # Compute Conv2d_BN --> MaxPoolAxis --> Conv2d_BN
         for layer in self.det_layers:
-            print(">>> Calling layer", layer.name)
             new_points = layer(new_points, training)
         
         # Compute Attention
