@@ -19,7 +19,7 @@ import tensorflow as tf
 
 # from models import feat3dnet_tf2
 # from models.net_factory import get_network
-from models.feat3dnet_tf2 import Feat3dNet, AttentionWeightedAlignmentLoss
+from models.feat3dnet_tf2 import Feat3dNet, Feat3dNet_sequential, AttentionWeightedAlignmentLoss
 
 from config import *
 from data.datagenerator import DataGenerator
@@ -131,14 +131,18 @@ def train():
              }
 
     # Hardcode to get tf2 model
-    model = Feat3dNet(True, param=param)
+    # model = Feat3dNet(True, param=param)
+    # input_shape = tf.TensorShape([BATCH_SIZE*3, args.num_points, args.data_dim])  # Const
+
+    model = Feat3dNet_sequential(True, param=param)
+
     loss_fn = AttentionWeightedAlignmentLoss(param['Attention'], param['margin'])
     optimizer = tf.keras.optimizers.Adam(1e-5)
     
     # Need to put in a dummy input to initialize the model.
     # model.build( 3 * [ tf.TensorShape([BATCH_SIZE, args.num_points, args.data_dim]) ] )
     rand_input = tf.concat([tf.random.normal([BATCH_SIZE, args.num_points, args.data_dim])]*3, axis=0)
-    model(rand_input, True)
+    model(rand_input, training=True)
 
     # model.compile(optimizer=optimizer, loss=model.feat_3d_net_loss)    
     # Unsure what 'metrics' to apply here
@@ -182,7 +186,8 @@ def train():
             anchors, positives, negatives = train_data.next_triplet(k=BATCH_SIZE,
                                                                     num_points=args.num_points,
                                                                     augmentation=train_augmentations)
-            next_triplet = tf.convert_to_tensor([anchors, positives, negatives])
+            
+            # next_triplet = tf.convert_to_tensor([anchors, positives, negatives]) # unused to save memory
             point_cloud = tf.concat([anchors, positives, negatives], axis=0, name="point_cloud")
 
             if anchors is None or anchors.shape[0] != BATCH_SIZE:
@@ -191,10 +196,10 @@ def train():
             # visualise input data
             print("> Type of anchor input:", type(anchors))
             print("> Type of point_cloud input:", type(point_cloud))
-            print("> Type of next_triplet input:", type(next_triplet))
+            # print("> Type of next_triplet input:", type(next_triplet))
             print("> Shape of anchor:", anchors.shape)    # 6, 4096, 6 for now
             print("> Shape of point_cloud:", point_cloud.shape)    # 6, 4096, 6 for now
-            print("> Shape of next_triplet:", next_triplet.shape)    # 6, 4096, 6 for now
+            # print("> Shape of next_triplet:", next_triplet.shape)    # 6, 4096, 6 for now
 
             # save a model pb
             # _1, features, att, _3 = model(point_cloud, training=True)
@@ -202,23 +207,26 @@ def train():
             # input(">>>")
 
             # Training
-            with tf.GradientTape(persistent=True) as tape_train:
-                tape_train.watch([model.trainable_weights])
+            with tf.GradientTape(persistent=False) as tape_train:
+                tape_train.watch([model.trainable_weights, point_cloud])
 
                 # Run forward pass
                 _1, features, att, _3 = model(point_cloud, training=True)
-                
+                print(">>> Attention:", att)
+
                 # loss_val = model.feat_3d_net_loss(att, next_triplet)
-                loss_val = loss_fn(att, next_triplet)
+                loss_val = loss_fn(att, point_cloud)
             
-            grads = tape_train.gradient(loss_val, model.trainable_weights)
             print(">>> Loss:", loss_val)        # It can be seen that stuff is happening here...
-            print(">>> Individual gradients:")
-            for e in zip(grads, model.trainable_weights):
-                print(">>> {} | {}".format(e[1].name, e[0]))
+            grads = tape_train.gradient(loss_val, model.trainable_weights)
+            optimizer.apply_gradients(zip(grads, model.trainable_weights))
+            
+            # print(">>> Individual gradients:")
+            # for e in zip(grads, model.trainable_weights):
+            #     print(">>> {} | {}".format(e[1].name, e[0]))
             
             # Returns None?
-            optimizer.minimize(loss_val, model.trainable_weights, tape=tape_train)
+            # optimizer.minimize(loss_val, model.trainable_weights, tape=tape_train)
 
             # Same as above, only more verbose.
             '''
@@ -227,11 +235,9 @@ def train():
 
             # Use the gradient tape to automatically retrieve
             # the gradients of the trainable variables with respect to the loss.
-            print(">>> Loss:", loss_val)        # It can be seen that stuff is happening here...
 
             # Run one step of gradient descent by updating
             # the value of the variables to minimize the loss.
-            # optimizer.apply_gradients(zip(grads, model.trainable_weights))
 
             '''
             logger.info("Loss at epoch {} step {}: {}".format(iEpoch, step, loss_val.numpy()))
@@ -333,15 +339,27 @@ def validate(model: Feat3dNet, val_folder, val_groundtruths, data_dim):
 
 if __name__ == '__main__':
 
-    import faulthandler
-    faulthandler.enable()
+    # import faulthandler
+    # faulthandler.enable()
 
-    config = tf.compat.v1.ConfigProto()
-    config.allow_soft_placement = True
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
+    # config = tf.compat.v1.ConfigProto()
+    # config.allow_soft_placement = True
 
+    # config.gpu_options.allow_growth = True
+
+    # os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
+    
+    # Set no GPU growth
+    print("Selecting GPU", args.gpu)
+    gpus = tf.config.list_physical_devices('GPU')
+    tf.config.set_visible_devices(gpus[args.gpu], 'GPU')
     gpu_string = '/gpu:{}'.format(args.gpu)
-    config.gpu_options.allow_growth = True
 
-    with tf.device(gpu_string):
-        train()
+
+    gpu_dev = gpus[ int(args.gpu) ]
+
+    tf.config.experimental.set_memory_growth(gpu_dev, True)
+    train()
+
+    # with tf.device(gpu_string):
+        # train()
