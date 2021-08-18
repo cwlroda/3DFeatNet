@@ -25,11 +25,11 @@ def pairwise_dist(A: tf.Tensor, B: tf.Tensor) -> tf.Tensor:
 class MaxPoolAxis(tf.keras.layers.Layer):
     '''Computes custom max pooling operation on custom axis.
     '''
-    def __init__(self, axis:'list[int]'=[2]):
-        super(MaxPoolAxis, self).__init__(name="MaxPoolAxis")
+    def __init__(self, name="MaxPoolAxis", axis:'list[int]'=[2]):
+        super(MaxPoolAxis, self).__init__(name=name)
         self.axis = axis
 
-    def call(self, input_pts):
+    def call(self, input_pts, training):
         pooled = tf.reduce_max(input_pts, axis=self.axis, keepdims=True)
 
         return pooled
@@ -39,11 +39,11 @@ class MaxPoolConcat(tf.keras.layers.Layer):
         and then applies expansion and concatenation.
         Inherits from maxPoolAxis.
     '''
-    def __init__(self, axis:'list[int]'=[2]):
-        super(MaxPoolConcat, self).__init__(name="MaxPoolConcat")
-        self.maxPoolAxis = MaxPoolAxis(axis)
+    def __init__(self, name="MaxPoolConcat", axis:'list[int]'=[2]):
+        super(MaxPoolConcat, self).__init__(name=name)
+        self.maxPoolAxis = MaxPoolAxis(axis=axis)
 
-    def call(self, input_pts: tf.Variable):
+    def call(self, input_pts: tf.Variable, training):
         pooled = self.maxPoolAxis(input_pts)
         pooled_tile = tf.tile(pooled, [1, 1, input_pts.shape[2], 1])
         pooled_out = tf.concat((input_pts, pooled_tile), axis=3)
@@ -69,7 +69,7 @@ class Conv2D_BN(tf.keras.layers.Layer):
             if activation is not None:
                 self.activ = tf.keras.layers.Activation(activation, name='activ_%s' %activation)
 
-    def call(self, inp:tf.Variable, training=True):
+    def call(self, inp:tf.Variable, training=False):
         conv_out = self.conv(inp, training=training)
         # self.input_shape = self.conv.input_shape
         # self.output_shape = self.conv.output_shape

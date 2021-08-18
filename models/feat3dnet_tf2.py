@@ -511,3 +511,180 @@ class Feat3dNet(tf.keras.Model):
 
         return loss
         # return loss, self.Network.end_points
+
+
+class Feat3dNet_sequential(tf.keras.Model):
+    def __init__(self, train_or_infer, input_shape, name="3dFN_seq", param=None):
+        """ Constructor: Creates the 3dFeatNet model by calling its relevant sub-objects.
+
+        Args:
+            train_or_infer (bool): Whether to call `get_inference_model` (false) 
+                                   or `get_train_model` (true)
+
+            param:    Python dict containing the algorithm parameters. It should contain the
+                        following fields (square brackets denote paper's parameters':
+                        'NoRegress': Whether to skip regression of the keypoint orientation.
+                                    [False] (i.e. regress)
+                        'BaseScale': Cluster radius. [2.0] (as in the paper)
+                        'Attention': Whether to predict the attention. [True]
+                        'num_clusters': Number of clusters [512]
+                        'num_samples': Maximum number of points per cluster [64]
+                        'margin': Triplet loss margin [0.2]
+        """
+        super(Feat3dNet_sequential, self).__init__(name=name)
+
+        self.train_or_infer = train_or_infer
+
+        self.logger = logging.getLogger(self.__class__.__name__)
+        self.param = {}
+        self.param.update(param)
+        self.logger.info('Model parameters: %s', self.param)
+
+        self.end_points = {}
+        
+        # Parameters of calculation:
+        self._num_clusters = param['num_clusters']
+        self._radius = param['BaseScale']
+        self._num_samples = param['num_samples']
+        self._NoRegress = param['NoRegress']
+        self._Attention = param['Attention']
+
+        final_relu = True   # Required parameter for constructing ext_layers
+
+        mlp = [64, 128, 256]
+        mlp2 = [128, 64]
+        self.logger.info('Detection MLP sizes: {} | {} '.format(mlp, mlp2))
+
+        self.det_layers = []
+        for i, num_out_channel in enumerate(mlp):
+            self.det_layers.append(
+                Conv2D_BN(num_out_channel, [1,1], bn=True, padding='valid', name="det_conv_%d" %i)
+            )
+        self.det_layers.append( MaxPoolAxis(name="det_MaxPoolAxis") ) # Custom layer pooling only on one axis then tiling then concat
+        if mlp2 is not None:
+            for i, num_out_channel in enumerate(mlp2):
+                self.det_layers.append(
+                    Conv2D_BN(num_out_channel, [1,1], bn=True, padding='valid', name="det_conv_post_%d" %i)
+                )
+
+        self.Attention = tf.keras.layers.Conv2D(1, kernel_size=[1,1], strides=[1,1], padding='valid',
+                                                activation='softplus', name="attention"
+                                               )
+
+        self.Orientation = tf.keras.layers.Conv2D(2, kernel_size=[1,1], strides=[1,1], padding='valid',
+                                                    name='orientation' )
+
+        mlp = [32, 64]
+        mlp2 = [128] if self.param['feature_dim'] <= 64 else [256]
+        mlp3 = [self.param['feature_dim']]
+        self.logger.info('Description MLP sizes: {} | {} | {}'.format(mlp, mlp2, mlp3))
+        self.ext_layers = []
+        for i, num_out_channel in enumerate(mlp):
+            self.ext_layers.append(
+                Conv2D_BN(num_out_channel, [1,1], bn=True, padding='valid', name='ext_conv_%d' %i)
+            )
+        self.ext_layers.append(MaxPoolConcat(name="ext_MaxPoolConcat"))
+
+        if mlp2 is not None:
+            for i, num_out_channel in enumerate(mlp2):
+                self.ext_layers.append(
+                    Conv2D_BN(num_out_channel, [1,1], bn=True, padding='valid', name='ext_conv_mid_%d' %i,
+                            activation='relu' if (final_relu or i<len(mlp2) - 1) else None)
+                )
+        self.ext_layers.append(MaxPoolAxis(name="ext_MaxPoolAxis"))
+
+        if mlp3 is not None:
+            for i, num_out_channel in enumerate(mlp3):
+                self.ext_layers.append(
+                    Conv2D_BN(num_out_channel, [1,1], bn=True, padding='valid', name='ext_conv_post_%d' %i,
+                            activation='relu' if (final_relu or i<len(mlp3) - 1) else None)
+                )
+
+    @tf.function
+    def call(self, inputs, training=False):
+        '''
+        Forward pass of network.
+
+        Inputs:
+            inputs(tf.Tensor): Input point cloud of dimension (batch_size, ndataset, 3)
+            training(bool): indicates training or inference on layers called.
+
+        Outputs:
+
+        '''
+        if self.train_or_infer:
+            self.end_points['input_pointclouds'] = inputs
+
+        l0_xyz = inputs[:,:,:3]
+        print(">>> Shape of input point cloud: ", l0_xyz.shape)
+        l0_points = None    # Normal information not used in 3DFeat-Net
+        
+        ### Feature Detection Layer
+
+        # Compute Sampling and Grouping Ops
+        new_xyz = sample_points(l0_xyz, self._num_clusters)
+        new_points, idx = query_and_group_points(l0_xyz, l0_points, new_xyz, self._num_samples, 
+                            self._radius, knn=False, use_xyz=True, normalize_radius=True, 
+                            orientations=None)
+
+        print(">>> Input shape to Sequential:", new_points.shape)
+        
+        # Compute Conv2d_BN --> MaxPoolAxis --> Conv2d_BN
+        for layer in self.det_layers:
+            print(">>> Calling layer", layer.name)
+            new_points = layer(new_points, training)
+        
+        # Compute Attention
+        attention_out = self.Attention(new_points)
+        attention = tf.squeeze(attention_out, axis=[2,3])
+
+        # Compute Orientation
+        orientation_xy = self.Orientation(new_points)
+        orientation_xy = tf.squeeze(orientation_xy, axis=2)
+        orientation_xy = tf.nn.l2_normalize(orientation_xy, axis=2, epsilon=1e-8)
+        orientation = tf.atan2(orientation_xy[:, :, 1], orientation_xy[:, :, 0])
+
+        # update end_points
+        self.end_points['keypoints'] = new_xyz
+        self.end_points['attention'] = attention
+        self.end_points['orientation'] = orientation
+
+        keypoint_orientation = orientation
+
+        if self._NoRegress:
+            keypoint_orientation = None
+        if not self._Attention:
+            attention = None
+
+        ## Feature Extraction Layer
+        # Compute Sample and Group
+        new_xyz, new_points, idx, grouped_xyz, end_points_tmp = \
+            sample_and_group(npoint=512, radius=self._radius, nsample=self._num_samples, 
+                        xyz=l0_xyz, points=l0_points, tnet_spec=None, knn=False, use_xyz=True, 
+                        keypoints=new_xyz,orientations=keypoint_orientation,
+                        normalize_radius=True)
+        
+        self.end_points.update(end_points_tmp)
+
+        # Compute Conv2d_BN --> MaxPoolConcat --> Conv2d_BN --> MaxPoolAxis --> Conv2d_BN
+        for layer in self.ext_layers:
+            new_points = layer(new_points, training)
+
+        new_points = tf.squeeze(new_points, [2])
+
+        # Compute Features
+        
+        keypoints = new_xyz
+        features = new_points
+
+        # further computation if Train
+        if self.train_or_infer:
+            self.end_points['output_xyz'] = keypoints
+            self.end_points['output_features'] = features
+
+            keypoints = tf.split(keypoints, 3, axis=0)
+            features = tf.split(features, 3, axis=0)
+            attention = tf.split(attention, 3, axis=0)[0] if attention is not None else None
+        
+        # Return
+        return keypoints, features, attention, self.end_points
