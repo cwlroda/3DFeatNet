@@ -193,6 +193,8 @@ def train():
             
             # visualise input data
             print(anchors.shape)    # 6, 4096, 6 for now
+            print(type(anchors))
+
             # print(anchors[:5])
             # print(positives[:5])
             # print(negatives[:5])

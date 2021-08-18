@@ -304,7 +304,7 @@ class Feat3dNetInference(tf.Module):
         self.end_points.update(endpoints_temp)
 
         return xyz, features, attention, self.end_points
-    
+
 
 class Feat3dNetTrain(Feat3dNetInference):
     '''
@@ -337,7 +337,7 @@ class Feat3dNetTrain(Feat3dNetInference):
         Returns:
             xyz, features, anchor_attention, end_points
         '''
-
+        # print(">>> >>>", type(anchors))   # anchors, positives, negatives are EagerTensors.
         point_clouds = tf.concat([anchors, positives, negatives], axis=0)
         self.end_points['input_pointclouds'] = point_clouds
 
@@ -445,14 +445,16 @@ class Feat3dNet(tf.keras.Model):
         else: 
             self.Network = Feat3dNetInference(det_mlps, ext_mlps, self.param, "Feat3dNet")
 
-        self.layers_ = self.Network.layers
+        # self.layers_ = self.Network.layers
 
-    def call(self, inputs: 'list[tf.keras.Input]', training=False):
+    def call(self, inputs, training=False):
+        print(">>>", type(inputs))
         if self.train_or_infer:
-            # anchors, positives, negatives = inputs
+            # anchors, positives, negatives = inputs # Inputs is a list of tf.Tensors
             anchors = inputs[0]
             positives = inputs[1]
             negatives = inputs[2]
+            print(">>>", type(anchors))
 
             return self.Network(anchors, positives, negatives, training)
         else:
