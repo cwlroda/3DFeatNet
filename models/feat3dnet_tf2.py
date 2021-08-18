@@ -273,9 +273,9 @@ class Feat3dNetInference(tf.Module):
         Returns:
             xyz, features, attention, end_points
         '''
-
-        l0_xyz = point_cloud[:, :, :3]
+        print(">>> >>> Input type to Feat3dNetInfer:", type(point_cloud))
         # Check that the dimension is correct
+        l0_xyz = point_cloud[:, :, :3]
         print(">>> Shape of input point cloud: ", l0_xyz.shape)
 
         l0_points = None    # Normal information not used in 3DFeat-Net
@@ -327,18 +327,20 @@ class Feat3dNetTrain(Feat3dNetInference):
         super(Feat3dNetTrain, self).__init__(det_mlps, ext_mlps, param, name, bn)
     
     @tf.Module.with_name_scope
-    def __call__(self, anchors, positives, negatives, is_training):
+    def __call__(self, point_clouds, is_training):
         '''
         Args:
-            anchors (tf.Tensor): Anchor point clouds of size (batch_size, ndataset, 3).
-            positives (tf.Tensor): Positive point clouds, same size as anchors
-            negatives (tf.Tensor): Negative point clouds, same size as anchors
+            point_clouds (tf.Tensor): concatenated list of:
+                anchors (tf.Tensor): Anchor point clouds of size (batch_size, ndataset, 3).
+                positives (tf.Tensor): Positive point clouds, same size as anchors
+                negatives (tf.Tensor): Negative point clouds, same size as anchors
             is_training (bool): Train vs infer
         Returns:
             xyz, features, anchor_attention, end_points
         '''
+        print(">>> >>> Input type to Feat3dNetTrain:", type(point_clouds))
         # print(">>> >>>", type(anchors))   # anchors, positives, negatives are EagerTensors.
-        point_clouds = tf.concat([anchors, positives, negatives], axis=0)
+        # point_clouds = tf.concat([anchors, positives, negatives], axis=0)
         self.end_points['input_pointclouds'] = point_clouds
 
         xyz, features, attention, endpoints_temp = \
@@ -448,7 +450,11 @@ class Feat3dNet(tf.keras.Model):
         # self.layers_ = self.Network.layers
 
     def call(self, inputs, training=False):
-        print(">>>", type(inputs))
+        print(">>> Input to Feat3dNet:", type(inputs))
+        return self.Network(inputs, training)
+        # Function signature takes in 1 tensor anyway
+
+        '''
         if self.train_or_infer:
             # anchors, positives, negatives = inputs # Inputs is a list of tf.Tensors
             anchors = inputs[0]
@@ -462,6 +468,7 @@ class Feat3dNet(tf.keras.Model):
             # point_cloud = inputs['point_cloud']
 
             return self.Network(point_cloud, training)
+        '''
 
     def feat_3d_net_loss( self, y_true, y_pred ):
         """ 

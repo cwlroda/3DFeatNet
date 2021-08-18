@@ -141,7 +141,7 @@ def train():
     
     # Need to put in a dummy input to initialize the model.
     # model.build( 3 * [ tf.TensorShape([BATCH_SIZE, args.num_points, args.data_dim]) ] )
-    rand_input = [tf.random.normal([BATCH_SIZE, args.num_points, args.data_dim])] * 3
+    rand_input = tf.concat([tf.random.normal([BATCH_SIZE, args.num_points, args.data_dim])]*3, axis=0)
     model(rand_input, True)
 
     # model.compile(optimizer=optimizer, loss=model.feat_3d_net_loss)    
@@ -186,26 +186,26 @@ def train():
             anchors, positives, negatives = train_data.next_triplet(k=BATCH_SIZE,
                                                                     num_points=args.num_points,
                                                                     augmentation=train_augmentations)
-            next_triplet = [anchors, positives, negatives]
+            next_triplet = tf.convert_to_tensor([anchors, positives, negatives])
+            point_cloud = tf.concat([anchors, positives, negatives], axis=0, name="point_cloud")
 
             if anchors is None or anchors.shape[0] != BATCH_SIZE:
                 break
             
             # visualise input data
-            print(anchors.shape)    # 6, 4096, 6 for now
-            print(type(anchors))
+            print("> Type of anchor input:", type(anchors))
+            print("> Type of point_cloud input:", type(point_cloud))
+            print("> Type of next_triplet input:", type(next_triplet))
+            print("> Shape of anchor:", anchors.shape)    # 6, 4096, 6 for now
+            print("> Shape of point_cloud:", point_cloud.shape)    # 6, 4096, 6 for now
+            print("> Shape of next_triplet:", next_triplet.shape)    # 6, 4096, 6 for now
 
-            # print(anchors[:5])
-            # print(positives[:5])
-            # print(negatives[:5])
-            # loss_val = tf.zeros(shape=1, dtype=tf.float32, name="LOSS")
-            
             # Training
             with tf.GradientTape(persistent=True) as tape_train:
                 tape_train.watch([model.trainable_weights])
 
                 # Run forward pass
-                _1, features, att, _3 = model(next_triplet, training=True)
+                _1, features, att, _3 = model(point_cloud, training=True)
                 
                 # loss_val = model.feat_3d_net_loss(att, next_triplet)
                 loss_val = loss_fn(att, next_triplet)
