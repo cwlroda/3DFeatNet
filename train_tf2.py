@@ -1,5 +1,4 @@
 '''
-
 Things to try tomorrow:
 
 - Run the old 3DFeatNet code on TF1 and inspect all layers (input/output sizes)
@@ -8,10 +7,7 @@ Things to try tomorrow:
 - Read through the 3DFeatNet code to see if there's anything i missed in terms of gradient calculation
 
 - Read up on custom Layers and if i need to add in any custom loss things to each layer
-- Watch Conv net tutorial
-
 '''
-
 
 import argparse
 import coloredlogs, logging
@@ -170,7 +166,7 @@ def train():
     # for w in model.trainable_weights:
     #     print(w.name, w.shape, w.dtype)
 
-    # model.summary(print_fn=logger.info)
+    model.summary(print_fn=logger.info)
     # input(">>>Continue?<<<") # i love breakpoints
     ### END INIT STUFF ###
 
@@ -200,6 +196,11 @@ def train():
             print("> Shape of point_cloud:", point_cloud.shape)    # 6, 4096, 6 for now
             print("> Shape of next_triplet:", next_triplet.shape)    # 6, 4096, 6 for now
 
+            # save a model pb
+            # _1, features, att, _3 = model(point_cloud, training=True)
+            # tf.saved_model.save(model, "model_tf2")
+            # input(">>>")
+
             # Training
             with tf.GradientTape(persistent=True) as tape_train:
                 tape_train.watch([model.trainable_weights])
@@ -210,8 +211,8 @@ def train():
                 # loss_val = model.feat_3d_net_loss(att, next_triplet)
                 loss_val = loss_fn(att, next_triplet)
             
-            print(">>> Loss:", loss_val)        # It can be seen that stuff is happening here...
             grads = tape_train.gradient(loss_val, model.trainable_weights)
+            print(">>> Loss:", loss_val)        # It can be seen that stuff is happening here...
             print(">>> Individual gradients:")
             for e in zip(grads, model.trainable_weights):
                 print(">>> {} | {}".format(e[1].name, e[0]))
@@ -232,17 +233,11 @@ def train():
             # the value of the variables to minimize the loss.
             # optimizer.apply_gradients(zip(grads, model.trainable_weights))
 
-            logger.info("Loss at epoch {} step {}: {}".format(iEpoch, step, loss_val.numpy()))
             '''
+            logger.info("Loss at epoch {} step {}: {}".format(iEpoch, step, loss_val.numpy()))
 
             with train_writer.as_default():
                 tf.summary.scalar("Loss", loss_val)
-
-            '''
-            below is not used...
-            # result = model.train_on_batch([anchors, positives, negatives])
-            # metrics_names = model.metrics_names
-            '''
                 
             if step % args.checkpoint_every_n_steps == 0:
                 savepath = checkpoint_dir + "_{}".format(step)
