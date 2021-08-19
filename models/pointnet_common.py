@@ -20,7 +20,7 @@ def sample_points(xyz, npoint):
     '''
 
     if npoint <= 0:
-        new_xyz = tf.identity(xyz)
+        new_xyz = tf.identity(xyz, name="samplePointIdentity")
     else:
         new_xyz = gather_point(xyz, farthest_point_sample(npoint, xyz))
 
