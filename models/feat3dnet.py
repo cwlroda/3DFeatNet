@@ -173,13 +173,14 @@ class Feat3dNet(tf.keras.Model):
         features = tf.nn.l2_normalize(new_points, axis=2, epsilon=1e-8)
 
         # further computation if Train
-        if self.train_or_infer and training:
+        if self.train_or_infer:
             self.end_points['output_xyz'] = keypoints
             self.end_points['output_features'] = features
-
-            keypoints = tf.split(keypoints, 3, axis=0)
-            features = tf.split(features, 3, axis=0)
-            attention = tf.split(attention, 3, axis=0)[0] if attention is not None else None
+            
+            if training:
+                keypoints = tf.split(keypoints, 3, axis=0)
+                features = tf.split(features, 3, axis=0)
+                attention = tf.split(attention, 3, axis=0)[0] if attention is not None else None
 
         return keypoints, features, attention, self.end_points
 

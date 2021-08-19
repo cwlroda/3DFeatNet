@@ -1,14 +1,3 @@
-'''
-Things to try tomorrow:
-
-- Run the old 3DFeatNet code on TF1 and inspect all layers (input/output sizes)
-- Re-read the 3DFeatNet paper to double-check understanding on certain things
-
-- Read through the 3DFeatNet code to see if there's anything i missed in terms of gradient calculation
-
-- Read up on custom Layers and if i need to add in any custom loss things to each layer
-'''
-
 import argparse
 import coloredlogs, logging
 import logging.config
@@ -17,9 +6,7 @@ import os
 import sys
 import tensorflow as tf
 
-# from models import feat3dnet_tf2
-# from models.net_factory import get_network
-from models.feat3dnet_tf2 import Feat3dNet, Feat3dNet_sequential, AttentionWeightedAlignmentLoss
+from models.feat3dnet import Feat3dNet, AttentionWeightedAlignmentLoss
 
 from config import *
 from data.datagenerator import DataGenerator
@@ -130,22 +117,14 @@ def train():
              'feature_dim': args.feature_dim, 'freeze_scopes': None,
              }
 
-    # Hardcode to get tf2 model
-    # model = Feat3dNet(True, param=param)
-    # input_shape = tf.TensorShape([BATCH_SIZE*3, args.num_points, args.data_dim])  # Const
-
-    model = Feat3dNet_sequential(True, param=param)
+    model = Feat3dNet(True, param=param)
 
     loss_fn = AttentionWeightedAlignmentLoss(param['Attention'], param['margin'])
     optimizer = tf.keras.optimizers.Adam(1e-5)
     
     # Need to put in a dummy input to initialize the model.
-    # model.build( 3 * [ tf.TensorShape([BATCH_SIZE, args.num_points, args.data_dim]) ] )
     rand_input = tf.concat([tf.random.normal([BATCH_SIZE, args.num_points, args.data_dim])]*3, axis=0)
     model(rand_input, training=True)
-
-    # model.compile(optimizer=optimizer, loss=model.feat_3d_net_loss)    
-    # Unsure what 'metrics' to apply here
 
     # init model
     model_find = tf.train.latest_checkpoint(checkpoint_dir)
@@ -165,13 +144,13 @@ def train():
     logger.info('Training Batch size: %i, validation batch size: %i', BATCH_SIZE, VAL_BATCH_SIZE)
     logger.info("TF Executing Eagerly? {}".format(tf.executing_eagerly() ))  # Shld be true
 
-    # debug stuff here
+    # debug here
     # print("Model has {} trainable weights".format(len(model.trainable_weights)))
     # for w in model.trainable_weights:
     #     print(w.name, w.shape, w.dtype)
 
     model.summary(print_fn=logger.info)
-    # input(">>>Continue?<<<") # i love breakpoints
+    # input(">>>Continue?<<<") # breakpoint
     ### END INIT STUFF ###
 
     step = 0
@@ -201,13 +180,11 @@ def train():
             # print("> Shape of next_triplet:", next_triplet.shape)    # 6, 4096, 6 for now
 
             # Training
-            '''
-            Use the gradient tape to automatically retrieve
-            the gradients of the trainable variables with respect to the loss.
+            # Use the gradient tape to automatically retrieve
+            # the gradients of the trainable variables with respect to the loss.
 
-            Run one step of gradient descent by updating
-            the value of the variables to minimize the loss.
-            '''
+            # Run one step of gradient descent by updating
+            # the value of the variables to minimize the loss.
             with tf.GradientTape(persistent=False, watch_accessed_variables=False) as tape_train:
                 tape_train.watch([model.trainable_weights])
 
