@@ -127,3 +127,6 @@ scripts_evaluation/results_*/
 data/oxford/*
 data/oxford
 ckpt_tf2.tar.gz
+
+# Draft things
+draft.py

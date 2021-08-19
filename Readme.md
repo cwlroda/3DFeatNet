@@ -1,4 +1,4 @@
-# 3DFeat-Net: Weakly Supervised Local 3D Features for Point Cloud Registration
+# 3DFeat-Net: Weakly Supervised Local 3D Features for Point Cloud Registration -- TensorFlow 2 Implementation
 
 ![pic-network](docs/pic-network.png)
 
@@ -28,7 +28,7 @@ This version of the code is developed and tested on the following environment:
 
 We also use MATLAB scripts for evaluation and processing of data.
 
-To install, create a new `conda` environment, and install the `requirements_tf2.txt` using **pip**. Attempting to install via `conda` will not work, for some reason.
+To install, create a new `conda` environment in **Python 3.7**, and install the `requirements_tf2.txt` using **pip**. Attempting to install via `conda` will not work, for some reason.
 
 ## Network
 
