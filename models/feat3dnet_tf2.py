@@ -363,7 +363,7 @@ class AttentionWeightedAlignmentLoss(tf.keras.losses.Loss):
         self.attention = attention
         self.margin = margin
 
-    # @tf.function
+    @tf.function
     def call(self, y_true, y_pred):
         """ 
         Computes the attention weighted alignment loss as described in our paper.
@@ -376,47 +376,29 @@ class AttentionWeightedAlignmentLoss(tf.keras.losses.Loss):
             loss (tf.Tensor scalar)
         """
         # Simple stacking
-        # anchors = y_pred[0]
-        # positives = y_pred[1]
-        # negatives = y_pred[2]
-
-        # input is the same point cloud as to the model
-        anchors = y_pred[:BATCH_SIZE, :, :]
-        positives = y_pred[BATCH_SIZE:BATCH_SIZE*2, :, :]
-        negatives= y_pred[BATCH_SIZE*2:BATCH_SIZE*3, :, :]
-
-        b, n, m = anchors.shape
+        anchors, positives, negatives = y_pred
 
         # Computes for each feature of the anchor, the distance to the nearest feature in the positive and negative
         positive_dist = pairwise_dist(anchors, positives)
-        print(">>> Shape from Loss", anchors.shape, positive_dist.shape)
         best_positive = tf.reduce_min(positive_dist, axis=2)
-        
-        print(">>> Shape after reduce_min", best_positive.shape)
-        assert positive_dist.shape==(b,n,n) # as per definition
-
         del positive_dist   # hacky memory management
 
         negative_dist = pairwise_dist(anchors, negatives)
         best_negative = tf.reduce_min(negative_dist, axis=2)
- 
         del negative_dist   # hacky memory management
 
         if not self.attention:
             sum_positive = tf.reduce_mean(best_positive, 1)
-            print(">>> Shape after reduce_mean", sum_positive.shape)
             sum_negative = tf.reduce_mean(best_negative, 1)
         else:
             attention_sm = y_true / tf.reduce_sum(y_true, axis=1)[:, None]
             sum_positive = tf.reduce_sum(attention_sm * best_positive, 1)
             sum_negative = tf.reduce_sum(attention_sm * best_negative, 1)
 
-            # tf.summary.histogram("normalized_attention", attention_sm)
+            tf.summary.histogram("normalized_attention", attention_sm)
             # self.Network.end_points['normalized_attention'] = attention_sm
 
         triplet_cost = tf.maximum(0., sum_positive - sum_negative + self.margin)
-        print(">>> Shape after max:", triplet_cost.shape)
-
         loss = tf.reduce_mean(triplet_cost)
 
         return loss
@@ -648,12 +630,13 @@ class Feat3dNet_sequential(tf.keras.Model):
                             self._radius, knn=False, use_xyz=True, normalize_radius=True, 
                             orientations=None)
 
-        # self.logger.info(">>> Input shape to Sequential:", new_points.shape)
-        
+        # print(">>> Feature dimension after query and group:", new_points.shape)
+
         # Compute Conv2d_BN --> MaxPoolAxis --> Conv2d_BN
         for layer in self.det_layers:
             new_points = layer(new_points, training)
-        
+            # print(">>> Feature dimension after {}:".format(layer.name), new_points.shape)
+
         # Compute Attention
         attention_out = self.Attention(new_points)
         attention = tf.squeeze(attention_out, axis=[2,3])
@@ -683,22 +666,24 @@ class Feat3dNet_sequential(tf.keras.Model):
                         xyz=l0_xyz, points=l0_points, tnet_spec=None, knn=False, use_xyz=True, 
                         keypoints=new_xyz,orientations=keypoint_orientation,
                         normalize_radius=True)
-        
+        # print(">>> Feature dimension after sample and group:", new_points.shape)
+
         self.end_points.update(end_points_tmp)
 
         # Compute Conv2d_BN --> MaxPoolConcat --> Conv2d_BN --> MaxPoolAxis --> Conv2d_BN
         for layer in self.ext_layers:
             new_points = layer(new_points, training)
+            # print(">>> Feature dimension after {}:".format(layer.name), new_points.shape)
 
         new_points = tf.squeeze(new_points, [2])
-
+        # print(">>> Feature dimension after squeeze:", new_points.shape)
         # Compute Features
         
         keypoints = new_xyz
-        features = new_points
+        features = tf.nn.l2_normalize(new_points, axis=2, epsilon=1e-8)
 
         # further computation if Train
-        if self.train_or_infer:
+        if self.train_or_infer and training:
             self.end_points['output_xyz'] = keypoints
             self.end_points['output_features'] = features
 
