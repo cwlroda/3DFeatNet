@@ -131,8 +131,8 @@ class Feat3dNet(tf.keras.Model):
             new_points = layer(new_points, training)
 
         # Compute Attention
-        attention_out = self.Attention(new_points)
-        attention = tf.squeeze(attention_out, axis=[2,3])
+        attention = self.Attention(new_points)
+        attention = tf.squeeze(attention, axis=[2,3])
 
         # Compute Orientation
         orientation_xy = self.Orientation(new_points)
@@ -141,16 +141,18 @@ class Feat3dNet(tf.keras.Model):
         orientation = tf.atan2(orientation_xy[:, :, 1], orientation_xy[:, :, 0])
 
         # update end_points
-        self.end_points['keypoints'] = new_xyz
-        self.end_points['attention'] = attention
-        self.end_points['orientation'] = orientation
+        if self.train_or_infer:
+            self.end_points['keypoints'] = new_xyz
+            self.end_points['attention'] = attention
+            self.end_points['orientation'] = orientation
 
         keypoint_orientation = orientation
 
         if self._NoRegress:
             keypoint_orientation = None
         if not self._Attention:
-            attention = None
+            attention = tf.multiply(attention, 0.0)
+            # Set attention==0 (so that a Tensor is always returned)
 
         ## Feature Extraction Layer
         # Compute Sample and Group
@@ -160,7 +162,8 @@ class Feat3dNet(tf.keras.Model):
                         keypoints=new_xyz,orientations=keypoint_orientation,
                         normalize_radius=True)
 
-        self.end_points.update(end_points_tmp)
+        if self.train_or_infer:
+            self.end_points.update(end_points_tmp)
 
         # Compute Conv2d_BN --> MaxPoolConcat --> Conv2d_BN --> MaxPoolAxis --> Conv2d_BN
         for layer in self.ext_layers:
@@ -169,20 +172,23 @@ class Feat3dNet(tf.keras.Model):
         new_points = tf.squeeze(new_points, [2])
         
         # Compute Features
-        keypoints = new_xyz
-        features = tf.nn.l2_normalize(new_points, axis=2, epsilon=1e-8)
+        
+        # keypoints = new_xyz
+        # features = new_points
+        new_points = tf.nn.l2_normalize(new_points, axis=2, epsilon=1e-8)
 
         # further computation if Train
         if self.train_or_infer:
-            self.end_points['output_xyz'] = keypoints
-            self.end_points['output_features'] = features
+            self.end_points['output_xyz'] = new_xyz
+            self.end_points['output_features'] = new_points
             
             if training:
-                keypoints = tf.split(keypoints, 3, axis=0)
-                features = tf.split(features, 3, axis=0)
-                attention = tf.split(attention, 3, axis=0)[0] if attention is not None else None
+                new_xyz = tf.split(new_xyz, 3, axis=0)
+                new_points = tf.split(new_points, 3, axis=0)
+                # attention = tf.split(attention, 3, axis=0)[0] if attention is not None else None
+                attention = tf.split(attention, 3, axis=0)[0]
 
-        return keypoints, features, attention, self.end_points
+        return new_xyz, new_points, attention, self.end_points
 
 class AttentionWeightedAlignmentLoss(tf.keras.losses.Loss):
     '''
