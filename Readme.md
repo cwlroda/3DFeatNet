@@ -67,3 +67,9 @@ It should be straightforward to run on your own data, just make sure the data is
 
 ## Datasets
 Refer to [scripts_data_processing/Readme.md](scripts_data_processing/Readme.md).
+
+## Conversion to ONNX and TensorRT
+To convert the trained model for inference into ONNX format, first wait for training to complete. Subsequently, run the `inference_example.sh` script, which will call sample data on the model so that a `SavedModel` can be built. Subsequently, it will save the TensorFlow `SavedModel` to a directory (by defaut, `./ckpt/infer_model`).
+
+Subsequently, call ```python -m tf2onnx.convert --saved-model ./ckpt/infer_model --output model_infer.onnx --load_op_libraries ./tf_ops/grouping/tf_grouping_so.so,./tf_ops/sampling/tf_sampling_so.so```. The last flag is important, as it registers the custom ops in ONNX.
+The model can then be verified visually calling `netron model_infer.onnx`.
