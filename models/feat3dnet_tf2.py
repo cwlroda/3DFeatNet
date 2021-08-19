@@ -603,7 +603,7 @@ class Feat3dNet_sequential(tf.keras.Model):
                             activation='relu' if (final_relu or i<len(mlp3) - 1) else None)
                 )
 
-    @tf.function
+    # @tf.function
     def call(self, inputs, training=False):
         '''
         Forward pass of network.
