@@ -19,8 +19,8 @@ VAL_PROPORTION = 1.0
 
 # Arguments
 parser = argparse.ArgumentParser(description='Trains 3dFeatNet_tf2')
-parser.add_argument('--gpu', type=int, default=0,
-                    help='GPU to use (default: 0)')
+parser.add_argument('--gpu', type=str, default=0,
+                    help='GPU to use (default: None (Distributed Training strategy))')
 # data
 parser.add_argument('--data_dim', type=int, default=6,
                     help='Input dimension for data. Note: Feat3D-Net will only use the first 3 \
@@ -91,7 +91,11 @@ def log_arguments():
     s = 'Arguments:\n' + s
     logger.info(s)
 
-def train():
+def train(gpu_list):
+    '''
+    Overall wrapper function for training the 3DFeatNet model.
+    If multi-GPU behaviour is desired, do not enable this flag.
+    '''
 
     ### BEGIN INIT STUFF ###
 
@@ -117,23 +121,27 @@ def train():
              'feature_dim': args.feature_dim, 'freeze_scopes': None,
              }
 
-    model = Feat3dNet(True, param=param)
+    # Distributed training strategy:
+    mirrored_strat = tf.distribute.MirroredStrategy(devices=gpu_list)   # Make use of all GPUs on the device
 
-    loss_fn = AttentionWeightedAlignmentLoss(param['Attention'], param['margin'])
-    optimizer = tf.keras.optimizers.Adam(1e-5)
+    with mirrored_strat.scope():
+        model = Feat3dNet(True, param=param)    
+        
+        # init model
+        model_find = tf.train.latest_checkpoint(checkpoint_dir)
+        if model_find is not None:
+            model.load_weights(model_find)
+            logger.info('Restored weights from {}.'.format(model_find))
+        else:
+            logger.info('Unable to find a latest checkpoint in {}.'.format(checkpoint_dir))
+        loss_fn = AttentionWeightedAlignmentLoss(param['Attention'], param['margin'])
+        optimizer = tf.keras.optimizers.Adam(1e-5)
     
+        rand_input = tf.concat([tf.random.normal([BATCH_SIZE, args.num_points, args.data_dim])]*3, axis=0)
+        model(rand_input, training=True)
+
     # Need to put in a dummy input to initialize the model.
-    rand_input = tf.concat([tf.random.normal([BATCH_SIZE, args.num_points, args.data_dim])]*3, axis=0)
-    model(rand_input, training=True)
 
-    # init model
-    model_find = tf.train.latest_checkpoint(checkpoint_dir)
-    if model_find is not None:
-        model.load_weights(model_find)
-        logger.info('Restored weights from {}.'.format(model_find))
-    else:
-        logger.info('Unable to find a latest checkpoint in {}.'.format(checkpoint_dir))
-    
     # init summary writers
     logger.info('Summaries will be stored in: %s', args.log_dir)
     train_writer = tf.summary.create_file_writer(os.path.join(args.log_dir, 'train'))
@@ -295,24 +303,20 @@ def validate(model, val_folder, val_groundtruths, data_dim):
 
 if __name__ == '__main__':
 
-    # import faulthandler
-    # faulthandler.enable()
+    gpu_list = []
+    for i in args.gpu:
+        gpu_list.append("/gpu:" + i)
 
-    # config = tf.compat.v1.ConfigProto()
-    # config.allow_soft_placement = True
+    print("Intending to run using GPUS: {}".format([i for i in gpu_list]))
 
-    # config.gpu_options.allow_growth = True
+    # Set GPU growth
+    # # print("Selecting GPU", args.gpu)
+    # gpus = tf.config.list_physical_devices('GPU')
+    # tf.config.set_visible_devices(gpus[args.gpu], 'GPU')
+    # gpu_string = '/gpu:{}'.format(args.gpu)
 
-    # os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
-    
-    # Set no GPU growth
-    print("Selecting GPU", args.gpu)
-    gpus = tf.config.list_physical_devices('GPU')
-    tf.config.set_visible_devices(gpus[args.gpu], 'GPU')
-    gpu_string = '/gpu:{}'.format(args.gpu)
+    # gpu_dev = gpus[ int(args.gpu) ]
 
-    gpu_dev = gpus[ int(args.gpu) ]
+    # tf.config.experimental.set_memory_growth(gpu_dev, True)
 
-    tf.config.experimental.set_memory_growth(gpu_dev, True)
-
-    train()
+    train(gpu_list)

@@ -2,7 +2,7 @@
 
 DATASET_DIR=./data/oxford
 LOG_DIR=./ckpt
-GPU_ID=0
+GPU_ID=0123
 
 set -e
 
