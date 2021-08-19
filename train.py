@@ -137,10 +137,21 @@ def train(gpu_list):
         loss_fn = AttentionWeightedAlignmentLoss(param['Attention'], param['margin'])
         optimizer = tf.keras.optimizers.Adam(1e-5)
     
+        # Need to put in a dummy input to initialize the model.
         rand_input = tf.concat([tf.random.normal([BATCH_SIZE, args.num_points, args.data_dim])]*3, axis=0)
         model(rand_input, training=True)
 
-    # Need to put in a dummy input to initialize the model.
+    # Reset model weights if necessary. Does a simple nested search.
+    if args.restore_exclude is not None:
+        print(args.restore_exclude)
+        for layer in model.layers:
+            for x in args.restore_exclude:
+                if x in layer.name:
+                    print("Layer: {}".format(layer.name))
+
+                    for weight in layer.weights:
+                        print("\tWeight:", weight.name)
+                        weight = tf.random.normal(weight.shape)
 
     # init summary writers
     logger.info('Summaries will be stored in: %s', args.log_dir)
