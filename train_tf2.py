@@ -187,63 +187,42 @@ def train():
                                                                     num_points=args.num_points,
                                                                     augmentation=train_augmentations)
             
-            # next_triplet = tf.convert_to_tensor([anchors, positives, negatives]) # unused to save memory
             point_cloud = tf.concat([anchors, positives, negatives], axis=0, name="point_cloud")
 
             if anchors is None or anchors.shape[0] != BATCH_SIZE:
                 break
             
             # visualise input data
-            print("> Type of anchor input:", type(anchors))
-            print("> Type of point_cloud input:", type(point_cloud))
-            # print("> Type of next_triplet input:", type(next_triplet))
-            print("> Shape of anchor:", anchors.shape)    # 6, 4096, 6 for now
-            print("> Shape of point_cloud:", point_cloud.shape)    # 6, 4096, 6 for now
+            # print("> Type of anchor input:", type(anchors))
+            # print("> Type of point_cloud input:", type(point_cloud))
+            # # print("> Type of next_triplet input:", type(next_triplet))
+            # print("> Shape of anchor:", anchors.shape)    # 6, 4096, 6 for now
+            # print("> Shape of point_cloud:", point_cloud.shape)    # 6, 4096, 6 for now
             # print("> Shape of next_triplet:", next_triplet.shape)    # 6, 4096, 6 for now
 
-            # save a model pb
-            # _1, features, att, _3 = model(point_cloud, training=True)
-            # tf.saved_model.save(model, "model_tf2")
-            # input(">>>")
-
             # Training
-            with tf.GradientTape(persistent=False) as tape_train:
-                tape_train.watch([model.trainable_weights, point_cloud])
+            '''
+            Use the gradient tape to automatically retrieve
+            the gradients of the trainable variables with respect to the loss.
+
+            Run one step of gradient descent by updating
+            the value of the variables to minimize the loss.
+            '''
+            with tf.GradientTape(persistent=False, watch_accessed_variables=False) as tape_train:
+                tape_train.watch([model.trainable_weights])
 
                 # Run forward pass
                 _1, features, att, _3 = model(point_cloud, training=True)
-                print(">>> Attention:", att)
 
-                # loss_val = model.feat_3d_net_loss(att, next_triplet)
-                loss_val = loss_fn(att, point_cloud)
+                loss_val = loss_fn(att, features)
             
-            print(">>> Loss:", loss_val)        # It can be seen that stuff is happening here...
             grads = tape_train.gradient(loss_val, model.trainable_weights)
             optimizer.apply_gradients(zip(grads, model.trainable_weights))
             
-            # print(">>> Individual gradients:")
-            # for e in zip(grads, model.trainable_weights):
-            #     print(">>> {} | {}".format(e[1].name, e[0]))
-            
-            # Returns None?
-            # optimizer.minimize(loss_val, model.trainable_weights, tape=tape_train)
-
-            # Same as above, only more verbose.
-            '''
-            # print(">>>Features:", features)
-            # print(">>> Attention:", att)
-
-            # Use the gradient tape to automatically retrieve
-            # the gradients of the trainable variables with respect to the loss.
-
-            # Run one step of gradient descent by updating
-            # the value of the variables to minimize the loss.
-
-            '''
             logger.info("Loss at epoch {} step {}: {}".format(iEpoch, step, loss_val.numpy()))
 
             with train_writer.as_default():
-                tf.summary.scalar("Loss", loss_val)
+                tf.summary.scalar("Loss", loss_val, step=step)
                 
             if step % args.checkpoint_every_n_steps == 0:
                 savepath = checkpoint_dir + "_{}".format(step)
@@ -258,7 +237,7 @@ def train():
                 fp_rate = validate(model, val_folder, val_groundtruths, args.data_dim)
 
                 with test_writer.as_default():
-                    tf.summary.scalar("fp_rate", fp_rate)
+                    tf.summary.scalar("fp_rate", fp_rate, step=step)
 
                 logger.info('Validation for step %i. FP Rate: %f', step, fp_rate)
                 # ---------------------------- TEST EVAL End -----------------------
@@ -284,7 +263,7 @@ def load_validation_groundtruths(fname, proportion=1):
 
     return groundtruths
 
-def validate(model: Feat3dNet, val_folder, val_groundtruths, data_dim):
+def validate(model, val_folder, val_groundtruths, data_dim):
     
     if val_groundtruths is None or len(val_groundtruths)==0:
         return 1
@@ -320,9 +299,9 @@ def validate(model: Feat3dNet, val_folder, val_groundtruths, data_dim):
         clouds1 = np.concatenate(clouds1, axis=0)[None, :, :]
         clouds2 = np.concatenate(clouds2, axis=0)[None, :, :]
 
-        xyz1, features1,_,_ = model(inputs=clouds1, training=False)
+        xyz1, features1, _, _ = model(inputs=clouds1, training=False)
 
-        xyz2, features2,_,_ = model(inputs=clouds2, training=False)
+        xyz2, features2, _, _ = model(inputs=clouds2, training=False)
 
         d = np.sqrt(np.sum(np.square(np.squeeze(features1 - features2)), axis=1))
         d = d[:num_clusters]
@@ -355,11 +334,8 @@ if __name__ == '__main__':
     tf.config.set_visible_devices(gpus[args.gpu], 'GPU')
     gpu_string = '/gpu:{}'.format(args.gpu)
 
-
     gpu_dev = gpus[ int(args.gpu) ]
 
     tf.config.experimental.set_memory_growth(gpu_dev, True)
-    train()
 
-    # with tf.device(gpu_string):
-        # train()
+    train()
