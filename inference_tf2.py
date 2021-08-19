@@ -16,7 +16,7 @@ from config import *
 from data.datagenerator import DataGenerator
 
 # from models.net_factory import get_network
-from models.feat3dnet_tf2 import Feat3dNet
+from models.feat3dnet import Feat3dNet
 from utils import get_tensors_in_checkpoint_file
 
 # Defaults
@@ -125,12 +125,6 @@ def compute_descriptors():
 
                 # Compute attention over all points
                 xyz_cur, _, attention_cur, _ = model(pointclouds, False)
-                
-                # TODO do the endpoints need to be fed in?
-                # xyz_cur, attention_cur = \
-                #     sess.run([xyz_op, attention_op],
-                #                 feed_dict={cloud_pl: pointclouds, is_training: False,
-                #                         end_points['keypoints']: xyz_subset})
 
                 xyz.append(xyz_cur)
                 attention.append(attention_cur)
