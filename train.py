@@ -232,8 +232,7 @@ def train(gpu_list):
             
             # # Run through validation data
             if step % args.validate_every_n_steps == 0 or step == 1:
-
-                print()
+                # print()
                 # ---------------------------- TEST EVAL -----------------------
                 fp_rate = validate(model, val_folder, val_groundtruths, args.data_dim)
 
@@ -247,10 +246,11 @@ def train(gpu_list):
                 train_writer.flush()
 
             step += 1
-            print()
+            # print()
     
     model.save_weights(savepath)
-    logger.info("Before finishing train step, saved checkpoint at {}.".format(step, savepath))
+    logger.info("Before finishing training at epoch {} and step {},\
+        saved checkpoint at {}.".format(args.num_epochs-1, step, savepath))
 
 def load_validation_groundtruths(fname, proportion=1):
     groundtruths = []
