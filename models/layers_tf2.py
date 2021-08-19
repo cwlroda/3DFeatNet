@@ -8,6 +8,7 @@ Tf2 refactor attempt by TianYi
 
 import tensorflow as tf
 
+@tf.function
 def pairwise_dist(A: tf.Tensor, B: tf.Tensor) -> tf.Tensor:
     ''' Computes pairwise distance
     :param A: (B x N x D) containing descriptors of A
@@ -16,9 +17,9 @@ def pairwise_dist(A: tf.Tensor, B: tf.Tensor) -> tf.Tensor:
              and kth descriptor in ith model of B
     '''
 
-    A = tf.expand_dims(A, 2)
-    B = tf.expand_dims(B, 1)
-    dist = tf.reduce_sum(tf.math.squared_difference(A, B), 3)
+    A = tf.expand_dims(A, axis=2)
+    B = tf.expand_dims(B, axis=1)
+    dist = tf.reduce_sum(tf.math.squared_difference(A, B), axis=3)
 
     return dist
 
