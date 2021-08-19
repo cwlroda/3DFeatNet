@@ -5,6 +5,7 @@ Author: Zi Jian Yew <zijian.yew@comp.nus.edu.sg>
 '''
 
 import argparse
+import coloredlogs
 import logging
 import logging.config
 import numpy as np
@@ -20,7 +21,7 @@ from models.feat3dnet import Feat3dNet
 from utils import get_tensors_in_checkpoint_file
 
 # Defaults
-CKPT_PATH = './ckpt/checkpoint.ckpt'
+CKPT_PATH = './ckpt/'
 MAX_POINTS = 30000
 
 # Arguments
@@ -63,6 +64,7 @@ args = parser.parse_args()
 # Create Logging
 logging.config.fileConfig('logging.conf')
 logger = logging.getLogger(__name__)
+coloredlogs.install(level='DEBUG', logger=logger)
 
 
 def compute_descriptors():
@@ -87,12 +89,13 @@ def compute_descriptors():
     model = Feat3dNet(False, param=param)
     
     # init model
-    model_find = tf.train.latest_checkpoint(CKPT_PATH)
+    logger.info("Trying to find a checkpoint in {}".format(args.checkpoint))
+    model_find = tf.train.latest_checkpoint(args.checkpoint)
     if model_find is not None:
         model.load_weights(model_find)
         logger.info('Restored weights from {}.'.format(model_find))
     else:
-        logger.info('Unable to find a latest checkpoint in {}'.format(CKPT_PATH))
+        logger.info('Unable to find a latest checkpoint in {}'.format(args.checkpoint))
     
     num_processed = 0
 
@@ -176,6 +179,10 @@ def compute_descriptors():
         num_processed += 1
         logger.info('Processed %i / %i images', num_processed, len(binFiles))
 
+    model_savepath = CKPT_PATH + "infer_model"
+    model.save(model_savepath)
+    logger.info("Saved inference model in {}".format(model_savepath))   # save model after everything is done
+
 
 def log_arguments():
     s = '\n'.join(['    {}: {}'.format(arg, getattr(args, arg)) for arg in vars(args)])
@@ -221,9 +228,9 @@ def nms(xyz, attention):
 
 if __name__ == '__main__':
 
-    config = tf.ConfigProto()
-    config.allow_soft_placement = True
-    config.gpu_options.allow_growth = True
+    # config = tf.ConfigProto() 
+    # config.allow_soft_placement = True    
+    # config.gpu_options.allow_growth = True    
     os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
     gpu_string = '/gpu:{}'.format(args.gpu)
 
