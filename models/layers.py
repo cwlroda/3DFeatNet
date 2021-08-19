@@ -58,17 +58,21 @@ class Conv2D_BN(tf.keras.layers.Layer):
                 activation='relu', name='conv2d_bn'):
         super(Conv2D_BN, self).__init__(name=name)
         
+        conv_name = name+"_conv2d"
         self.conv = tf.keras.layers.Conv2D(filters, kernel_size, stride, padding, 
-                                    activation=None if bn else activation)
+                                    activation=None if bn else activation,
+                                    name=conv_name)
 
         self.bn = None
         self.activ = None
         
         if bn:
-            self.bn = tf.keras.layers.BatchNormalization( axis=-1, name='bn')
+            bn_name = name+"_bn"
+            self.bn = tf.keras.layers.BatchNormalization( axis=-1, name=bn_name)
 
             if activation is not None:
-                self.activ = tf.keras.layers.Activation(activation, name='activ_%s' %activation)
+                activ_name = name+"_activ_"+activation
+                self.activ = tf.keras.layers.Activation(activation, name=activ_name)
 
     def call(self, inp:tf.Variable, training=False):
         conv_out = self.conv(inp, training=training)
