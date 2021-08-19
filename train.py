@@ -208,12 +208,17 @@ def train(gpu_list):
 
             with train_writer.as_default():
                 tf.summary.scalar("Loss", loss_val, step=step)
-                
+
             if step % args.checkpoint_every_n_steps == 0:
                 savepath = checkpoint_dir + "_{}".format(step)
                 model.save_weights(savepath)
                 logger.info("At step {}, saved checkpoint at {}.".format(step, savepath))
 
+            savedModel_every_n_steps = 1000
+            if step % savedModel_every_n_steps == 0:
+                model.save(checkpoint_dir+"_savedModel")
+                logger.info("At step {}, saved SavedModel at {}.".format(step, checkpoint_dir))
+            
             # # Run through validation data
             if step % args.validate_every_n_steps == 0 or step == 1:
 
@@ -232,6 +237,9 @@ def train(gpu_list):
 
             step += 1
             print()
+    
+    model.save_weights(savepath)
+    logger.info("Before finishing train step, saved checkpoint at {}.".format(step, savepath))
 
 def load_validation_groundtruths(fname, proportion=1):
     groundtruths = []
