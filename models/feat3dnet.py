@@ -56,13 +56,13 @@ class Feat3dNet(tf.keras.Model):
         self.det_layers = []
         for i, num_out_channel in enumerate(mlp):
             self.det_layers.append(
-                Conv2D_BN(num_out_channel, [1,1], bn=True, padding='valid', name="det_conv_%d" %i)
+                Conv2D_BN(num_out_channel, [1,1], bn=True, padding='valid', name="detection_conv_%d" %i)
             )
         self.det_layers.append( MaxPoolAxis(name="det_MaxPoolAxis") ) # Custom layer pooling only on one axis then tiling then concat
         if mlp2 is not None:
             for i, num_out_channel in enumerate(mlp2):
                 self.det_layers.append(
-                    Conv2D_BN(num_out_channel, [1,1], bn=True, padding='valid', name="det_conv_post_%d" %i)
+                    Conv2D_BN(num_out_channel, [1,1], bn=True, padding='valid', name="detection_conv_post_%d" %i)
                 )
 
         self.Attention = tf.keras.layers.Conv2D(1, kernel_size=[1,1], strides=[1,1], padding='valid',
@@ -79,22 +79,22 @@ class Feat3dNet(tf.keras.Model):
         self.ext_layers = []
         for i, num_out_channel in enumerate(mlp):
             self.ext_layers.append(
-                Conv2D_BN(num_out_channel, [1,1], bn=True, padding='valid', name='ext_conv_%d' %i)
+                Conv2D_BN(num_out_channel, [1,1], bn=True, padding='valid', name='description_conv_%d' %i)
             )
-        self.ext_layers.append(MaxPoolConcat(name="ext_MaxPoolConcat"))
+        self.ext_layers.append(MaxPoolConcat(name="desc_MaxPoolConcat"))
 
         if mlp2 is not None:
             for i, num_out_channel in enumerate(mlp2):
                 self.ext_layers.append(
-                    Conv2D_BN(num_out_channel, [1,1], bn=True, padding='valid', name='ext_conv_mid_%d' %i,
+                    Conv2D_BN(num_out_channel, [1,1], bn=True, padding='valid', name='description_conv_mid_%d' %i,
                             activation='relu' if (final_relu or i<len(mlp2) - 1) else None)
                 )
-        self.ext_layers.append(MaxPoolAxis(name="ext_MaxPoolAxis"))
+        self.ext_layers.append(MaxPoolAxis(name="desc_MaxPoolAxis"))
 
         if mlp3 is not None:
             for i, num_out_channel in enumerate(mlp3):
                 self.ext_layers.append(
-                    Conv2D_BN(num_out_channel, [1,1], bn=True, padding='valid', name='ext_conv_post_%d' %i,
+                    Conv2D_BN(num_out_channel, [1,1], bn=True, padding='valid', name='description_conv_post_%d' %i,
                             activation='relu' if (final_relu or i<len(mlp3) - 1) else None)
                 )
 
