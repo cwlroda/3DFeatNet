@@ -36,7 +36,7 @@ def query_and_group_points(xyz, points, new_xyz, nsample, radius, knn=False,
     else:
         idx, pts_cnt = query_ball_point(radius, nsample, xyz, new_xyz)
 
-    tf.compat.v1.summary.histogram('pts_cnt', pts_cnt)
+    tf.summary.histogram('pts_cnt query_and_group', pts_cnt)
 
     # Group XYZ coordinates
     grouped_xyz = group_point(xyz, idx)  # (batch_size, npoint, nsample, 3)
@@ -98,6 +98,8 @@ def sample_and_group(npoint, radius, nsample, xyz, points, tnet_spec=None, knn=F
         pts_cnt = nsample  # Hack. By right should make sure number of input points < nsample
     else:
         idx, pts_cnt = query_ball_point(radius, nsample, xyz, new_xyz)
+
+    tf.summary.histogram('pts_cnt sample_and_group', pts_cnt)
 
     grouped_xyz = group_point(xyz, idx)  # (batch_size, npoint, nsample, 3)
     grouped_xyz = grouped_xyz - tf.tile(tf.expand_dims(new_xyz, 2), [1, 1, nsample, 1])  # translation normalization
