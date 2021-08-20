@@ -131,7 +131,7 @@ def compute_descriptors():
                 xyz_subset = pointclouds[:, startPt:endPt, :3]
 
                 # Compute attention over all points
-                xyz_cur, _, attention_cur, _ = model(pointclouds, False)
+                xyz_cur, keypoints_cur, attention_cur, end_points_cur = model(pointclouds, False)
 
                 xyz.append(xyz_cur)
                 attention.append(attention_cur)
@@ -169,7 +169,7 @@ def compute_descriptors():
             xyz_nms = np.stack(xyz_nms, axis=0)
 
         # Compute features
-        xyz, features, _,_ = model(pointclouds, False)
+        xyz, features, attention, end_points = model(pointclouds, False)
         # xyz, features = \
         #     sess.run([xyz_op, features_op],
         #                 feed_dict={cloud_pl: pointclouds, is_training: False, end_points['keypoints']: xyz_nms})
@@ -183,7 +183,7 @@ def compute_descriptors():
         num_processed += 1
         logger.info('Processed %i / %i images', num_processed, len(binFiles))
 
-    model_savepath = os.path.join(os.get_cwd(), "inference_savedmodel")
+    model_savepath = os.path.join(os.getcwd(), "inference_savedmodel")
     model.save(model_savepath)
     logger.info("Saved inference model in {}".format(model_savepath))   # save model after everything is done
 
