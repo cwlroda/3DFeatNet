@@ -117,8 +117,7 @@ scrap*
 .DS_Store
 scripts_evaluation/results_*/
 *.mat
-**ckpt/
-**ckpt_tf2/
+**ckpt*/
 
 # Submap data
 *.bin
@@ -130,3 +129,6 @@ ckpt_tf2.tar.gz
 
 # Draft things
 draft.py
+
+# model onnx among other things
+onnx_models/*
