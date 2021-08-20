@@ -71,6 +71,7 @@ args = parser.parse_args()
 # Prepares the folder for saving checkpoints, summary, logs
 log_dir = args.log_dir
 checkpoint_dir = os.path.join(log_dir, 'ckpt')
+model_savepath = checkpoint_dir+"_savedModel"
 os.makedirs(checkpoint_dir, exist_ok=True)
 
 # Create Logging
@@ -125,33 +126,50 @@ def train(gpu_list):
     mirrored_strat = tf.distribute.MirroredStrategy(devices=gpu_list)   # Make use of all GPUs on the device
 
     with mirrored_strat.scope():
-        model = Feat3dNet(True, param=param)    
-        
+        model = Feat3dNet(True, param=param)
+
+        # Need to put in a dummy input to initialize the model.
+        rand_input = tf.concat([tf.random.normal([BATCH_SIZE, args.num_points, args.data_dim])]*3, axis=0)
+        model(rand_input, training=True)
+
+        # Extract initialised weights out of the model, for restoration later.
+        raw_weights = {}
+        for layer in model.layers:
+            raw_weights[layer.name] = layer.get_weights()
+
         # init model
         model_find = tf.train.latest_checkpoint(checkpoint_dir)
         if model_find is not None:
             model.load_weights(model_find)
             logger.info('Restored weights from {}.'.format(model_find))
         else:
-            logger.info('Unable to find a latest checkpoint in {}.'.format(checkpoint_dir))
+            logger.info('Unable to find a latest checkpoint in {}.'.format(log_dir))
+            input(">>>")
         loss_fn = AttentionWeightedAlignmentLoss(param['Attention'], param['margin'])
         optimizer = tf.keras.optimizers.Adam(1e-5)
-    
-        # Need to put in a dummy input to initialize the model.
-        rand_input = tf.concat([tf.random.normal([BATCH_SIZE, args.num_points, args.data_dim])]*3, axis=0)
-        model(rand_input, training=True)
 
     # Reset model weights if necessary. Does a simple nested search.
     if args.restore_exclude is not None:
-        print(args.restore_exclude)
+        logger.info("Found layers to regenerate weights for in restore_exclude: {}".format(args.restore_exclude))
         for layer in model.layers:
             for x in args.restore_exclude:
                 if x in layer.name:
-                    print("Layer: {}".format(layer.name))
+                    logger.info("In layer: {}".format(layer.name))
 
-                    for weight in layer.weights:
-                        print("\tWeight:", weight.name)
-                        weight = tf.random.normal(weight.shape)
+                    print("Before resetting:")
+                    for weight in layer.trainable_weights:
+                        print("\t{}\t{}".format(weight.name, weight.numpy()[:5]))
+
+                    layer.set_weights( raw_weights[layer.name] )
+
+                    print("After resetting:")
+                    for weight in layer.trainable_weights:
+                        print("\t{}\t{}".format(weight.name, weight.numpy()[:5]))
+
+    else:
+        logger.info("No weights to regenerate in restore_exclude.")
+
+    del raw_weights # Save memory
 
     # init summary writers
     logger.info('Summaries will be stored in: %s', args.log_dir)
@@ -221,14 +239,13 @@ def train(gpu_list):
                 tf.summary.scalar("Loss", loss_val, step=step)
 
             if step % args.checkpoint_every_n_steps == 0:
-                savepath = checkpoint_dir + "_{}".format(step)
-                model.save_weights(savepath)
-                logger.info("At step {}, saved checkpoint at {}.".format(step, savepath))
+                model.save_weights(checkpoint_dir)
+                logger.info("At step {}, saved checkpoint at {}.".format(step, checkpoint_dir))
 
-            savedModel_every_n_steps = 1000
+            savedModel_every_n_steps = 5000
             if step % savedModel_every_n_steps == 0:
-                model.save(checkpoint_dir+"_savedModel")
-                logger.info("At step {}, saved SavedModel at {}.".format(step, checkpoint_dir))
+                model.save(model_savepath)
+                logger.info("At step {}, saved SavedModel at {}.".format(step, model_savepath))
             
             # # Run through validation data
             if step % args.validate_every_n_steps == 0 or step == 1:
@@ -248,9 +265,9 @@ def train(gpu_list):
             step += 1
             # print()
     
-    model.save_weights(savepath)
+    model.save(model_savepath)
     logger.info("Before finishing training at epoch {} and step {},\
-        saved checkpoint at {}.".format(args.num_epochs-1, step, savepath))
+        saved model at {}.".format(args.num_epochs-1, step, model_savepath))
 
 def load_validation_groundtruths(fname, proportion=1):
     groundtruths = []

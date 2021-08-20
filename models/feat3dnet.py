@@ -146,10 +146,12 @@ class Feat3dNet(tf.keras.Model):
             self.end_points['attention'] = attention
             self.end_points['orientation'] = orientation
 
-        keypoint_orientation = orientation
+        # keypoint_orientation = orientation
 
+        # During training, the output of the detector is bypassed.
         if self._NoRegress:
-            keypoint_orientation = None
+            # keypoint_orientation = None
+            orientation = None
         if not self._Attention:
             attention = tf.multiply(attention, 0.0)
             # Set attention==0 (so that a Tensor is always returned)
@@ -159,7 +161,7 @@ class Feat3dNet(tf.keras.Model):
         new_xyz, new_points, idx, grouped_xyz, end_points_tmp = \
             sample_and_group(npoint=512, radius=self._radius, nsample=self._num_samples, 
                         xyz=l0_xyz, points=l0_points, tnet_spec=None, knn=False, use_xyz=True, 
-                        keypoints=new_xyz,orientations=keypoint_orientation,
+                        keypoints=new_xyz, orientations=orientation,
                         normalize_radius=True)
 
         if self.train_or_infer:
