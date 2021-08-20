@@ -243,8 +243,9 @@ def train(gpu_list):
                 tf.summary.scalar("Loss", loss_val, step=step)
 
             if step % args.checkpoint_every_n_steps == 0:
-                model.save_weights(checkpoint_dir)
-                logger.info("At step {}, saved checkpoint at {}.".format(step, checkpoint_dir))
+                checkpoint_path = os.path.join(checkpoint_dir, "ckpt_{}".format(step))
+                model.save_weights(checkpoint_path)
+                logger.info("At step {}, saved checkpoint at {}.".format(step, checkpoint_path))
 
             savedModel_every_n_steps = 5000
             if step % savedModel_every_n_steps == 0:
