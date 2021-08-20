@@ -159,16 +159,13 @@ def train(gpu_list):
             for x in args.restore_exclude:
                 if x in layer.name:
                     logger.info("In layer: {}".format(layer.name))
-
-                    print("Before resetting:")
-                    for weight in layer.trainable_weights:
-                        print("\t{}\t{}".format(weight.name, weight.numpy()[:5]))
-
+                    # print("Before resetting:")
+                    # for weight in layer.trainable_weights:
+                    #     print("\t{}\t{}".format(weight.name, weight.numpy()[:5]))
                     layer.set_weights( raw_weights[layer.name] )
-
-                    print("After resetting:")
-                    for weight in layer.trainable_weights:
-                        print("\t{}\t{}".format(weight.name, weight.numpy()[:5]))
+                    # print("After resetting:")
+                    # for weight in layer.trainable_weights:
+                    #     print("\t{}\t{}".format(weight.name, weight.numpy()[:5]))
 
     else:
         logger.info("No weights to regenerate in restore_exclude.")
