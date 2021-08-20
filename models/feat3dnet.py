@@ -158,7 +158,7 @@ class Feat3dNet(tf.keras.Model):
 
         ## Feature Extraction Layer
         # Compute Sample and Group
-        _new_xyz, new_points, idx, grouped_xyz, end_points_tmp = \
+        new_xyz, new_points, idx, grouped_xyz, end_points_tmp = \
             sample_and_group(npoint=512, radius=self._radius, nsample=self._num_samples, 
                         xyz=l0_xyz, points=l0_points, tnet_spec=None, knn=False, use_xyz=True, 
                         keypoints=new_xyz, orientations=orientation,
@@ -175,21 +175,22 @@ class Feat3dNet(tf.keras.Model):
         
         # Compute Features
         
-        keypoints = tf.convert_to_tensor(new_xyz, name="keypoints")
-        features = tf.nn.l2_normalize(new_points, axis=2, epsilon=1e-8, name="features")
+        # keypoints = new_xyz
+        # features = new_points
+        new_points = tf.nn.l2_normalize(new_points, axis=2, epsilon=1e-8)
 
         # further computation if Train
         if self.train_or_infer:
-            self.end_points['output_xyz'] = keypoints
-            self.end_points['output_features'] = features
+            self.end_points['output_xyz'] = new_xyz
+            self.end_points['output_features'] = new_points
             
             if training:
-                keypoints = tf.split(keypoints, 3, axis=0, name="keypoints_train")
-                features = tf.split(new_points, 3, axis=0, name="features_train")
+                new_xyz = tf.split(new_xyz, 3, axis=0)
+                new_points = tf.split(new_points, 3, axis=0)
                 # attention = tf.split(attention, 3, axis=0)[0] if attention is not None else None
-                attention = tf.split(attention, 3, axis=0, name="attention_train")[0]
+                attention = tf.split(attention, 3, axis=0)[0]
 
-        return new_xyz, features, attention, self.end_points
+        return new_xyz, new_points, attention, self.end_points
 
 class AttentionWeightedAlignmentLoss(tf.keras.losses.Loss):
     '''
