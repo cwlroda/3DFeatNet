@@ -187,7 +187,7 @@ def train(gpu_list):
     # for w in model.trainable_weights:
     #     print(w.name, w.shape, w.dtype)
 
-    model.summary(print_fn=logger.info)
+    model.summary(line_length=90, print_fn=logger.info)
     # input(">>>Continue?<<<") # breakpoint
     ### END INIT STUFF ###
 
@@ -238,7 +238,7 @@ def train(gpu_list):
 
             with train_writer.as_default():
                 tf.summary.scalar("Loss", loss_val, step=step)
-                tf.summary.graph(model.signatures['serving_default'].graph) # Add computation graph to TensorBoard
+                # tf.summary.graph(model.signatures["serving_default"].graph) # Add computation graph to TensorBoard
 
             if step % args.checkpoint_every_n_steps == 0:
                 checkpoint_path = os.path.join(checkpoint_dir, "ckpt_{}".format(step))
