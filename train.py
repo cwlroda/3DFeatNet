@@ -68,18 +68,19 @@ parser.add_argument('--num_epochs', type=int, default=1000,
                     help='Number of epochs to train for. Default=1000')
 args = parser.parse_args()
 
-# Prepares the folder for saving checkpoints, summary, logs
+# Prepares the folder for saving checkpoints, summary, logs, SavedModels
 log_dir = args.log_dir
 checkpoint_dir = os.path.join(log_dir, 'ckpt')
-model_savepath = checkpoint_dir+"_savedModel"
+model_savepath = os.path.join(log_dir, "SavedModel")
 os.makedirs(checkpoint_dir, exist_ok=True)
+os.makedirs(model_savepath, exist_ok=True)
 
 # Create Logging
 logging.config.fileConfig('logging.conf')
 logger = logging.getLogger(__name__)
 coloredlogs.install(level='DEBUG', logger=logger)
 
-fileHandler = logging.FileHandler("{0}/log.txt".format(checkpoint_dir))
+fileHandler = logging.FileHandler("{0}/log.txt".format(log_dir))
 logFormatter = logging.Formatter("%(asctime)s [%(levelname)s] %(name)s - %(message)s")
 fileHandler.setFormatter(logFormatter)
 logger.addHandler(fileHandler)
@@ -99,6 +100,10 @@ def train(gpu_list):
     '''
 
     ### BEGIN INIT STUFF ###
+
+    logger.info("Saving logs in {}".format(log_dir))
+    logger.info("Saving checkpoints in {}".format(checkpoint_dir))
+    logger.info("Saving SavedModels in {}".format(model_savepath))
 
     log_arguments()
 
@@ -143,8 +148,7 @@ def train(gpu_list):
             model.load_weights(model_find)
             logger.info('Restored weights from {}.'.format(model_find))
         else:
-            logger.info('Unable to find a latest checkpoint in {}.'.format(log_dir))
-            input(">>>")
+            logger.info('Unable to find a latest checkpoint in {}.'.format(checkpoint_dir))
         loss_fn = AttentionWeightedAlignmentLoss(param['Attention'], param['margin'])
         optimizer = tf.keras.optimizers.Adam(1e-5)
 
