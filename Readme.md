@@ -73,15 +73,3 @@ To convert the trained model for inference into ONNX format, first wait for trai
 
 Subsequently, call ```python -m tf2onnx.convert --saved-model ./ckpt/infer_model --output model_infer.onnx --load_op_libraries ./tf_ops/grouping/tf_grouping_so.so,./tf_ops/sampling/tf_sampling_so.so```. The last flag is important, as it registers the custom ops in ONNX.
 The model can then be verified visually calling `netron model_infer.onnx`.
-
-Attempted to use the command 
-```bash
-python -m tf2onnx.convert --saved-model inference_savedmodel/ --output model_train.onnx --load_op_libraries ./tf_ops/grouping/tf_grouping_so.so,./tf_ops/sampling/tf_sampling_so.so --verbose --rename-inputs pointcloud --rename-outputs sliced_pointcloud,features,attention
-```
-However, the custom ops are not correctly registered in ONNX, meaning that the ONNX model is unlikely to work out. This has to be resolved before further conversion occurs.
-
-For TensorRT conversion, the docker container was installed. Subsequently, call `sudo ./docker/launch.sh --tag tensorrt-ubuntu18.04-cuda11.3 --gpus all` from `/media/intern/SSD1/TensorRT` to start the Docker container. 
-
-**TODO:** 
-1. A symlink to the 3DFeatNet Tf2 repo needs to be created beforehand to allow the Docker Container to access the created ONNX model before things work!
-2. The `nvidia-docker-toolkit` needs to be setup on the workstation.
