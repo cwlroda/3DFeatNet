@@ -69,6 +69,10 @@ coloredlogs.install(level='DEBUG', logger=logger)
 
 def compute_descriptors():
 
+    # logger.info("Saving logs in {}".format(log_dir))
+    logger.info("Loading checkpoints from {}".format(args.checkpoint))
+    # logger.info("Saving SavedModels in {}".format(model_savepath))
+
     log_arguments()
 
     logger.debug('In compute_descriptors()')
@@ -179,7 +183,7 @@ def compute_descriptors():
         num_processed += 1
         logger.info('Processed %i / %i images', num_processed, len(binFiles))
 
-    model_savepath = CKPT_PATH + "infer_model"
+    model_savepath = os.path.join(os.get_cwd(), "inference_savedmodel")
     model.save(model_savepath)
     logger.info("Saved inference model in {}".format(model_savepath))   # save model after everything is done
 
