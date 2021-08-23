@@ -219,11 +219,11 @@ class AttentionWeightedAlignmentLoss(tf.keras.losses.Loss):
         # Computes for each feature of the anchor, the distance to the nearest feature in the positive and negative
         positive_dist = pairwise_dist(anchors, positives)
         best_positive = tf.reduce_min(positive_dist, axis=2)
-        del positive_dist   # hacky memory management
+        # del positive_dist   # hacky memory management
 
         negative_dist = pairwise_dist(anchors, negatives)
         best_negative = tf.reduce_min(negative_dist, axis=2)
-        del negative_dist   # hacky memory management
+        # del negative_dist   # hacky memory management
 
         if not self.attention:
             sum_positive = tf.reduce_mean(best_positive, 1)
