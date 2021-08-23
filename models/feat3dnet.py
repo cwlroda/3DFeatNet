@@ -47,7 +47,7 @@ class Feat3dNet(tf.keras.Model):
         self._NoRegress = param['NoRegress']
         self._Attention = param['Attention']
 
-        final_relu = True   # Required parameter for constructing ext_layers
+        final_relu = False   # Required parameter for constructing ext_layers
 
         mlp = [64, 128, 256]
         mlp2 = [128, 64]
@@ -70,7 +70,7 @@ class Feat3dNet(tf.keras.Model):
                                                )
 
         self.Orientation = tf.keras.layers.Conv2D(2, kernel_size=[1,1], strides=[1,1], padding='valid',
-                                                    name='detection_orientation' )
+                                                    name='detection_orientation', activation=None )
 
         mlp = [32, 64]
         mlp2 = [128] if self.param['feature_dim'] <= 64 else [256]
@@ -201,7 +201,7 @@ class AttentionWeightedAlignmentLoss(tf.keras.losses.Loss):
         self.attention = attention
         self.margin = margin
 
-    @tf.function
+    # @tf.function
     def call(self, y_true, y_pred):
         """ 
         Computes the attention weighted alignment loss as described in our paper.
