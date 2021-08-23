@@ -19,7 +19,8 @@ python train.py \
 python train.py \
   --data_dir $DATASET_DIR \
   --log_dir $LOG_DIR/secondstage \
-  --checkpoint $LOG_DIR/model_checkpoint \
+  --checkpoint $LOG_DIR/pretrain/ckpt \
+  --checkpoint_every_n_steps 2000 \
   --restore_exclude detection \
   --augmentation Jitter RotateSmall Shift Rotate1D \
   --num_epochs 70 \
