@@ -143,12 +143,15 @@ def train(gpu_list):
             raw_weights[layer.name] = layer.get_weights()
 
         # init model
-        model_find = tf.train.latest_checkpoint(checkpoint_dir)
-        if model_find is not None:
-            model.load_weights(model_find)
-            logger.info('Restored weights from {}.'.format(model_find))
+        if args.checkpoint is not None:
+            model_find = tf.train.latest_checkpoint(args.checkpoint)
+            if model_find is not None:
+                model.load_weights(model_find)
+                logger.info('Restored weights from {}.'.format(model_find))
+            else:
+                logger.info('Unable to find a latest checkpoint in {}.'.format(args.checkpoint))
         else:
-            logger.info('Unable to find a latest checkpoint in {}.'.format(checkpoint_dir))
+            logger.info("No checkpoint directory provided for restore")
         loss_fn = AttentionWeightedAlignmentLoss(param['Attention'], param['margin'])
         optimizer = tf.keras.optimizers.Adam(1e-5)
 
@@ -245,7 +248,7 @@ def train(gpu_list):
                 model.save_weights(checkpoint_path)
                 logger.info("At step {}, saved checkpoint at {}.".format(step, checkpoint_path))
 
-            savedModel_every_n_steps = 5000
+            savedModel_every_n_steps = args.checkpoint_every_n_steps * 10
             if step % savedModel_every_n_steps == 0:
                 model.save(model_savepath)
                 logger.info("At step {}, saved SavedModel at {}.".format(step, model_savepath))
