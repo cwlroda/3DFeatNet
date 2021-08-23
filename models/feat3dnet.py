@@ -66,11 +66,11 @@ class Feat3dNet(tf.keras.Model):
                 )
 
         self.Attention = tf.keras.layers.Conv2D(1, kernel_size=[1,1], strides=[1,1], padding='valid',
-                                                activation='softplus', name="attention"
+                                                activation='softplus', name="detection_attention"
                                                )
 
         self.Orientation = tf.keras.layers.Conv2D(2, kernel_size=[1,1], strides=[1,1], padding='valid',
-                                                    name='orientation' )
+                                                    name='detection_orientation' )
 
         mlp = [32, 64]
         mlp2 = [128] if self.param['feature_dim'] <= 64 else [256]
