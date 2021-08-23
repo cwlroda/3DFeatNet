@@ -4,6 +4,7 @@ import logging.config
 import numpy as np
 import os
 import sys
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '0'    # All logging messages
 import tensorflow as tf
 
 from models.feat3dnet import Feat3dNet, AttentionWeightedAlignmentLoss
@@ -128,32 +129,33 @@ def train(gpu_list):
              }
 
     # Distributed training strategy:
-    mirrored_strat = tf.distribute.MirroredStrategy(devices=gpu_list)   # Make use of all GPUs on the device
+    # mirrored_strat = tf.distribute.MirroredStrategy(devices=gpu_list)   # Make use of all GPUs on the device
 
-    with mirrored_strat.scope():
-        model = Feat3dNet(True, param=param)
+    # with mirrored_strat.scope():
 
-        # Need to put in a dummy input to initialize the model.
-        rand_input = tf.concat([tf.random.normal([BATCH_SIZE, args.num_points, args.data_dim])]*3, axis=0)
-        model(rand_input, training=True)
+    model = Feat3dNet(True, param=param)
 
-        # Extract initialised weights out of the model, for restoration later.
-        raw_weights = {}
-        for layer in model.layers:
-            raw_weights[layer.name] = layer.get_weights()
+    # Need to put in a dummy input to initialize the model.
+    rand_input = tf.concat([tf.random.normal([BATCH_SIZE, args.num_points, args.data_dim])]*3, axis=0)
+    model(rand_input, training=True)
 
-        # init model
-        if args.checkpoint is not None:
-            model_find = tf.train.latest_checkpoint(args.checkpoint)
-            if model_find is not None:
-                model.load_weights(model_find)
-                logger.info('Restored weights from {}.'.format(model_find))
-            else:
-                logger.info('Unable to find a latest checkpoint in {}.'.format(args.checkpoint))
+    # Extract initialised weights out of the model, for restoration later.
+    raw_weights = {}
+    for layer in model.layers:
+        raw_weights[layer.name] = layer.get_weights()
+
+    # init model
+    if args.checkpoint is not None:
+        model_find = tf.train.latest_checkpoint(args.checkpoint)
+        if model_find is not None:
+            model.load_weights(model_find)
+            logger.info('Restored weights from {}.'.format(model_find))
         else:
-            logger.info("No checkpoint directory provided for restore")
-        loss_fn = AttentionWeightedAlignmentLoss(param['Attention'], param['margin'])
-        optimizer = tf.keras.optimizers.Adam(1e-5)
+            logger.info('Unable to find a latest checkpoint in {}.'.format(args.checkpoint))
+    else:
+        logger.info("No checkpoint directory provided for restore")
+    loss_fn = AttentionWeightedAlignmentLoss(param['Attention'], param['margin'])
+    optimizer = tf.keras.optimizers.Adam(1e-5)
 
     # Reset model weights if necessary. Does a simple nested search.
     if args.restore_exclude is not None:
@@ -169,11 +171,10 @@ def train(gpu_list):
                     # print("After resetting:")
                     # for weight in layer.trainable_weights:
                     #     print("\t{}\t{}".format(weight.name, weight.numpy()[:5]))
-
     else:
         logger.info("No weights to regenerate in restore_exclude.")
 
-    del raw_weights # Save memory
+    # del raw_weights # Save memory
 
     # init summary writers
     logger.info('Summaries will be stored in: %s', args.log_dir)
@@ -203,6 +204,8 @@ def train(gpu_list):
 
         # Training data
         while True:
+            tf.summary.experimental.set_step(step)  # set the current step for logging
+
             anchors, positives, negatives = train_data.next_triplet(k=BATCH_SIZE,
                                                                     num_points=args.num_points,
                                                                     augmentation=train_augmentations)
@@ -224,22 +227,22 @@ def train(gpu_list):
             # Use the gradient tape to automatically retrieve
             # the gradients of the trainable variables with respect to the loss.
 
-            # Run one step of gradient descent by updating
-            # the value of the variables to minimize the loss.
-            with tf.GradientTape(persistent=False, watch_accessed_variables=False) as tape_train:
-                tape_train.watch([model.trainable_weights])
-
-                # Run forward pass
-                _1, features, att, _3 = model(point_cloud, training=True)
-
-                loss_val = loss_fn(att, features)
-            
-            grads = tape_train.gradient(loss_val, model.trainable_weights)
-            optimizer.apply_gradients(zip(grads, model.trainable_weights))
-            
-            logger.info("Loss at epoch {} step {}: {}".format(iEpoch, step, loss_val.numpy()))
-
             with train_writer.as_default():
+                # Run one step of gradient descent by updating
+                # the value of the variables to minimize the loss.
+                with tf.GradientTape(persistent=False, watch_accessed_variables=False) as tape_train:
+                    tape_train.watch([model.trainable_weights])
+
+                    # Run forward pass
+                    _1, features, att, _3 = model(point_cloud, training=True)
+
+                    loss_val = loss_fn(att, features)
+                
+                grads = tape_train.gradient(loss_val, model.trainable_weights)
+                optimizer.apply_gradients(zip(grads, model.trainable_weights))
+                
+                logger.info("Loss at epoch {} step {}: {}".format(iEpoch, step, loss_val.numpy()))
+
                 tf.summary.scalar("Loss", loss_val, step=step)
                 # tf.summary.graph(model.signatures["serving_default"].graph) # Add computation graph to TensorBoard
 
@@ -351,6 +354,8 @@ if __name__ == '__main__':
 
     print("Intending to run using GPUS: {}".format([i for i in gpu_list]))
 
+    assert len(gpu_list) <= 1
+
     # Set GPU growth
     # # print("Selecting GPU", args.gpu)
     # gpus = tf.config.list_physical_devices('GPU')
@@ -360,5 +365,6 @@ if __name__ == '__main__':
     # gpu_dev = gpus[ int(args.gpu) ]
 
     # tf.config.experimental.set_memory_growth(gpu_dev, True)
-
-    train(gpu_list)
+    
+    with tf.device('/gpu:'+args.gpu):
+        train(gpu_list)
