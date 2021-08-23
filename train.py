@@ -130,7 +130,6 @@ def train(gpu_list):
 
     # Distributed training strategy:
     # mirrored_strat = tf.distribute.MirroredStrategy(devices=gpu_list)   # Make use of all GPUs on the device
-
     # with mirrored_strat.scope():
 
     model = Feat3dNet(True, param=param)
@@ -234,13 +233,13 @@ def train(gpu_list):
                     tape_train.watch([model.trainable_weights])
 
                     # Run forward pass
-                    _1, features, att, _3 = model(point_cloud, training=True)
+                    _1, features, att, end_points = model(point_cloud, training=True)
 
                     loss_val = loss_fn(att, features)
-                
+
                 grads = tape_train.gradient(loss_val, model.trainable_weights)
                 optimizer.apply_gradients(zip(grads, model.trainable_weights))
-                
+
                 logger.info("Loss at epoch {} step {}: {}".format(iEpoch, step, loss_val.numpy()))
 
                 tf.summary.scalar("Loss", loss_val, step=step)
@@ -358,8 +357,8 @@ if __name__ == '__main__':
 
     # Set GPU growth
     # # print("Selecting GPU", args.gpu)
-    # gpus = tf.config.list_physical_devices('GPU')
-    # tf.config.set_visible_devices(gpus[args.gpu], 'GPU')
+    gpus = tf.config.list_physical_devices('GPU')
+    tf.config.set_visible_devices(gpus[ int(args.gpu) ], 'GPU')
     # gpu_string = '/gpu:{}'.format(args.gpu)
 
     # gpu_dev = gpus[ int(args.gpu) ]
