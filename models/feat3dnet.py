@@ -98,13 +98,16 @@ class Feat3dNet(tf.keras.Model):
                             activation='relu' if (final_relu or i<len(mlp3) - 1) else None)
                 )
 
-    def call(self, inputs, training=False):
+    def call(self, inputs, training=False, bypass_detect=None):
         '''
         Forward pass of network.
 
         Inputs:
             inputs(tf.Tensor): Input point cloud of dimension (batch_size, ndataset, 3)
             training(bool): indicates training or inference on layers called.
+            bypass_detect(tf.Tensor): Defaults to None. If not, it will be substituted into
+                the result of the "keypoints" from the detection section, effectively bypassing
+                it. This is used in the validation function for training.
         Outputs:
             keypoints
             features
@@ -119,39 +122,44 @@ class Feat3dNet(tf.keras.Model):
         l0_points = None    # Normal information not used in 3DFeat-Net
         
         ### Feature Detection Layer
-
-        # Compute Sampling and Grouping Ops
-        new_xyz = sample_points(l0_xyz, self._num_clusters)
-        new_points, idx = query_and_group_points(l0_xyz, l0_points, new_xyz, self._num_samples, 
-                            self._radius, knn=False, use_xyz=True, normalize_radius=True, 
-                            orientations=None)
-
-        # Compute Conv2d_BN --> MaxPoolAxis --> Conv2d_BN
-        for layer in self.det_layers:
-            new_points = layer(new_points, training)
-
-        # Compute Attention
-        attention = self.Attention(new_points)
-        attention = tf.squeeze(attention, axis=[2,3])
-
-        # Compute Orientation
-        orientation_xy = self.Orientation(new_points)
-        orientation_xy = tf.squeeze(orientation_xy, axis=2)
-        orientation_xy = tf.nn.l2_normalize(orientation_xy, axis=2, epsilon=1e-8)
-        orientation = tf.atan2(orientation_xy[:, :, 1], orientation_xy[:, :, 0])
-
-        # update end_points
-        # if self.train_or_infer:
-        self.end_points['keypoints'] = new_xyz
-        self.end_points['attention'] = attention
-        self.end_points['orientation'] = orientation
-
-        # During training, the output of the detector is bypassed.
-        if self._NoRegress:
+        if bypass_detect is not None:
+            new_xyz = bypass_detect
+            attention = None
             orientation = None
-        if not self._Attention:
-            attention = tf.multiply(attention, 0.0)
-            # Set attention==0 (so that a Tensor is always returned)
+        
+        else:
+            # Compute Sampling and Grouping Ops
+            new_xyz = sample_points(l0_xyz, self._num_clusters)
+            new_points, idx = query_and_group_points(l0_xyz, l0_points, new_xyz, self._num_samples, 
+                                self._radius, knn=False, use_xyz=True, normalize_radius=True, 
+                                orientations=None)
+
+            # Compute Conv2d_BN --> MaxPoolAxis --> Conv2d_BN
+            for layer in self.det_layers:
+                new_points = layer(new_points, training)
+
+            # Compute Attention
+            attention = self.Attention(new_points)
+            attention = tf.squeeze(attention, axis=[2,3])
+
+            # Compute Orientation
+            orientation_xy = self.Orientation(new_points)
+            orientation_xy = tf.squeeze(orientation_xy, axis=2)
+            orientation_xy = tf.nn.l2_normalize(orientation_xy, axis=2, epsilon=1e-8)
+            orientation = tf.atan2(orientation_xy[:, :, 1], orientation_xy[:, :, 0])
+
+            # update end_points
+            # if self.train_or_infer:
+            self.end_points['keypoints'] = new_xyz
+            self.end_points['attention'] = attention
+            self.end_points['orientation'] = orientation
+
+            # During training, the output of the detector is bypassed.
+            if self._NoRegress:
+                orientation = None
+            if not self._Attention:
+                attention = tf.multiply(attention, 0.0)
+                # Set attention==0 (so that a Tensor is always returned)
 
         ## Feature Extraction Layer
         # Compute Sample and Group. 
@@ -170,7 +178,7 @@ class Feat3dNet(tf.keras.Model):
             new_points = layer(new_points, training)
 
         new_points = tf.squeeze(new_points, [2])
-        
+    
         # Compute Features
         
         # keypoints = new_xyz

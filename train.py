@@ -324,13 +324,14 @@ def validate(model, val_folder, val_groundtruths, data_dim):
         num_clusters = min(len(val_groundtruths) - iTest, NUM_CLUSTERS)
         offsets[num_clusters:] = 0
         offsets = np.pad(offsets[:, None], ((0, 0), (0, 2)), mode='constant', constant_values=0)[None, :, :]
+        offsets = offsets.astype(np.float32)
 
         clouds1 = np.concatenate(clouds1, axis=0)[None, :, :]
         clouds2 = np.concatenate(clouds2, axis=0)[None, :, :]
 
-        xyz1, features1, _, _ = model(inputs=clouds1, training=False)
+        xyz1, features1, _, _ = model(inputs=clouds1, training=False, bypass_detect=offsets)
 
-        xyz2, features2, _, _ = model(inputs=clouds2, training=False)
+        xyz2, features2, _, _ = model(inputs=clouds2, training=False, bypass_detect=offsets)
 
         d = np.sqrt(np.sum(np.square(np.squeeze(features1 - features2)), axis=1))
         d = d[:num_clusters]
