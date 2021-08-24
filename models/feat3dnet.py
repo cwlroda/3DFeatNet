@@ -141,31 +141,29 @@ class Feat3dNet(tf.keras.Model):
         orientation = tf.atan2(orientation_xy[:, :, 1], orientation_xy[:, :, 0])
 
         # update end_points
-        if self.train_or_infer:
-            self.end_points['keypoints'] = new_xyz
-            self.end_points['attention'] = attention
-            self.end_points['orientation'] = orientation
-
-        # keypoint_orientation = orientation
+        # if self.train_or_infer:
+        self.end_points['keypoints'] = new_xyz
+        self.end_points['attention'] = attention
+        self.end_points['orientation'] = orientation
 
         # During training, the output of the detector is bypassed.
         if self._NoRegress:
-            # keypoint_orientation = None
             orientation = None
         if not self._Attention:
             attention = tf.multiply(attention, 0.0)
             # Set attention==0 (so that a Tensor is always returned)
 
         ## Feature Extraction Layer
-        # Compute Sample and Group
+        # Compute Sample and Group. 
+        # `npoint` is always 512, so the 'other' branch of PointNetSA is unused.
         new_xyz, new_points, idx, grouped_xyz, end_points_tmp = \
             sample_and_group(npoint=512, radius=self._radius, nsample=self._num_samples, 
                         xyz=l0_xyz, points=l0_points, tnet_spec=None, knn=False, use_xyz=True, 
                         keypoints=new_xyz, orientations=orientation,
                         normalize_radius=True)
 
-        if self.train_or_infer:
-            self.end_points.update(end_points_tmp)
+        # if self.train_or_infer:
+        self.end_points.update(end_points_tmp)
 
         # Compute Conv2d_BN --> MaxPoolConcat --> Conv2d_BN --> MaxPoolAxis --> Conv2d_BN
         for layer in self.ext_layers:
@@ -191,15 +189,22 @@ class Feat3dNet(tf.keras.Model):
                 attention = tf.split(attention, 3, axis=0)[0]
 
         return new_xyz, new_points, attention, self.end_points
+    
+    # def update_end_points_loss(self, attention_sm, sum_positive, sum_negative):
+    #     self.end_points['normalized_attention'] = attention_sm
+    #     self.end_points['sum_positive'] = sum_positive
+    #     self.end_points['sum_negative'] = sum_negative
+
 
 class AttentionWeightedAlignmentLoss(tf.keras.losses.Loss):
     '''
     Subclassed Loss function to calculate the Attention Weighted alignment loss.
     '''
-    def __init__(self, attention: bool, margin: float):
+    def __init__(self, attention: bool, margin: float, model):
         super().__init__()
         self.attention = attention
         self.margin = margin
+        self.model = model
 
     # @tf.function
     def call(self, y_true, y_pred):
@@ -209,6 +214,7 @@ class AttentionWeightedAlignmentLoss(tf.keras.losses.Loss):
         Args:
             y_true: Attention from anchor point clouds
             y_pred: List of [anchor_features, positive_features, negative_features]
+            model: Feat3dNet object to udpate end_points
 
         Returns:
             loss (tf.Tensor scalar)
@@ -234,8 +240,10 @@ class AttentionWeightedAlignmentLoss(tf.keras.losses.Loss):
             sum_negative = tf.reduce_sum(attention_sm * best_negative, 1)
 
             tf.summary.histogram("normalized_attention", attention_sm)
-            # self.Network.end_points['normalized_attention'] = attention_sm
+            self.model.end_points['normalized_attention'] = attention_sm
 
+        self.model.end_points['sum_positive'] = sum_positive
+        self.model.end_points['sum_negative'] = sum_negative
         triplet_cost = tf.maximum(0., sum_positive - sum_negative + self.margin)
         loss = tf.reduce_mean(triplet_cost)
 
