@@ -153,7 +153,7 @@ def train(gpu_list):
             logger.info('Unable to find a latest checkpoint in {}.'.format(args.checkpoint))
     else:
         logger.info("No checkpoint directory provided for restore")
-    loss_fn = AttentionWeightedAlignmentLoss(param['Attention'], param['margin'])
+    loss_fn = AttentionWeightedAlignmentLoss(param['Attention'], param['margin'], model)
     optimizer = tf.keras.optimizers.Adam(1e-5)
 
     # Reset model weights if necessary. Does a simple nested search.
