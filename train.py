@@ -182,6 +182,10 @@ def train(gpu_list):
     train_writer.init()
     test_writer.init()
 
+    tb_callback = tf.keras.callbacks.TensorBoard(os.path.join(args.log_dir, 'train'))
+    tb_callback.set_model(model)
+    logger.info("Saved model representation/graph to TensorBoard.")
+
     logger.info('Training Batch size: %i, validation batch size: %i', BATCH_SIZE, VAL_BATCH_SIZE)
     logger.info("TF Executing Eagerly? {}".format(tf.executing_eagerly() ))  # Shld be true
 

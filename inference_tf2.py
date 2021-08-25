@@ -65,7 +65,7 @@ args = parser.parse_args()
 logging.config.fileConfig('logging.conf')
 logger = logging.getLogger(__name__)
 coloredlogs.install(level='DEBUG', logger=logger)
-
+model_savepath = os.path.join(os.getcwd(), "inference_savedmodel")
 
 def compute_descriptors():
 
@@ -183,7 +183,18 @@ def compute_descriptors():
         num_processed += 1
         logger.info('Processed %i / %i images', num_processed, len(binFiles))
 
-    model_savepath = os.path.join(os.getcwd(), "inference_savedmodel")
+    # Doesn't yet work. Supposed to write graph to summary filewriter.
+    writer = tf.summary.create_file_writer(model_savepath)
+    with writer.as_default():
+        tb_callback = tf.keras.callbacks.TensorBoard(model_savepath)
+        tb_callback.set_model(model)
+
+        tf.summary.scalar("Test", num_processed, step=num_processed)
+        
+        writer.flush()
+    logger.info("Saved model representation/graph to TensorBoard.")
+    # assert 0
+
     model.save(model_savepath)
     logger.info("Saved inference model in {}".format(model_savepath))   # save model after everything is done
 
