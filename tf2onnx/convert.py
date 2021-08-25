@@ -70,6 +70,23 @@ def make_default_custom_op_handler(domain):
         return node
     return default_custom_op_handler
 
+_TENSORFLOW_DOMAIN = "ai.onnx.converters.tensorflow"
+def print_handler(ctx, node, name, args):
+    # replace tf.Print() with Identity
+    #   T output = Print(T input, data, @list(type) U, @string message, @int first_n, @int summarize)
+    # becomes:
+    #   T output = Identity(T Input)
+    node.type = "Identity"
+    node.domain = _TENSORFLOW_DOMAIN
+    del node.input[1:]
+    return node
+
+def queryBallPoint_handler(ctx, node, name, args):
+    pass
+
+def groupPoint_handler(ctx, node, name, args):
+    pass
+
 def _convert_common(frozen_graph, name="unknown", large_model=False, output_path=None,
                     output_frozen_graph=None, **kwargs):
     """Common processing for conversion."""
