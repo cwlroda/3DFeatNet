@@ -132,3 +132,4 @@ draft.py
 
 # model onnx among other things
 onnx_models/*
+inference_savedmodel/
