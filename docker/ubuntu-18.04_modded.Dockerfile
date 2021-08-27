@@ -120,7 +120,7 @@ WORKDIR /workspace
 # Add path for trtexec to image
 ENV PATH="/usr/lib/bin/:$PATH"
 # for tensorflow to include the right path
-ENV LD_LIBRARY_PATH="/usr/local/cuda-11.3/lib64:$LD_LIBRARY_PATH"
+ENV LD_LIBRARY_PATH="/opt/conda/envs/tf2/lib/python3.7/site-packages/tensorflow/:/usr/local/cuda-11.3/lib64:$LD_LIBRARY_PATH"
 
 # Enable the conda env as well as colour terminal
 RUN sed -i "s|activate base|activate tf2|g" ~/.bashrc

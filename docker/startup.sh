@@ -15,3 +15,5 @@ mkdir -p build && cd build
 cmake .. -DTENSORRT_ROOT=$TRT_OSSPATH && make -j$(nproc)
 export LD_LIBRARY_PATH=$PWD:$LD_LIBRARY_PATH
 make install
+
+LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/opt/conda/envs/tf2/lib/python3.7/site-packages/tensorflow/
