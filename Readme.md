@@ -73,11 +73,12 @@ To convert the trained model for inference into ONNX format, first wait for trai
 
 Subsequently, call the `tf2onnx.convert` submodule (should be installed as part of `requirements.txt`):
 ```bash
-python -m tf2onnx.convert 
---saved-model ./inference_savedmodel/ --output onnx_modles/model_infer.onnx \
+python -m tf2onnx.convert \
+--saved-model ./inference_savedmodel/ --output onnx_models/model_infer.onnx \
 --load_op_libraries ./tf_ops/grouping/tf_grouping_so.so,./tf_ops/sampling/tf_sampling_so.so \
 --rename-inputs pointcloud --rename-outputs keypoints,features,attention \
---custom-ops QueryBallPoint,GroupPoint,FarthestPointSample,GatherPoint,KnnPoint
+--custom-ops QueryBallPoint,GroupPoint,FarthestPointSample,GatherPoint,KnnPoint \
+--opset 11  # Can be changed as per requirements in trtexec
 ```
 This will save an `onnx` model named `model_infer.onnx` in the 3DFeatNet base directory. The model can then be verified visually calling `netron model_infer.onnx`.
 
@@ -105,11 +106,20 @@ bash 3DFeatNet/docker/startup.sh
 ```
 This installs the TensorRT and onnx-trt inside the Docker image. You can also edit this script to your liking.
 
-## Running inference in ONNX
-
 ## Converting ONNX to TensorRT
+To convert the ONNX files to TensorRT, start up the Docker image as detailed above.
+Navigate to the 3DFeatNet repo in the container workspace and run the following:
+```bash
+trtexec --onnx=./onnx_models/model_infer.onnx \
+--plugins=tf_ops/grouping/tf_grouping_so.so \
+--plugins=tf_ops/sampling/tf_sampling_so.so \
+--saveEngine=./TensorRT/model_infer.lib
+```
+If successful, it registers the inference engine in `./TensorRT/model_infer.lib`.
 
 ## Running inference in TensorRT
+
+## Running inference in ONNX
 
 # Anything below this line is experimental
 *****
