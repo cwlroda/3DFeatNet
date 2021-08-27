@@ -133,5 +133,5 @@ data/oxford
 draft.py
 
 # model onnx among other things
-onnx_models/*
+*.onnx
 inference_savedmodel/

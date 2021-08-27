@@ -74,7 +74,7 @@ To convert the trained model for inference into ONNX format, first wait for trai
 Subsequently, call the `tf2onnx.convert` submodule (should be installed as part of `requirements.txt`):
 ```bash
 python -m tf2onnx.convert 
---saved-model ./inference_savedmodel/ --output model_infer.onnx \
+--saved-model ./inference_savedmodel/ --output onnx_modles/model_infer.onnx \
 --load_op_libraries ./tf_ops/grouping/tf_grouping_so.so,./tf_ops/sampling/tf_sampling_so.so \
 --rename-inputs pointcloud --rename-outputs keypoints,features,attention \
 --custom-ops QueryBallPoint,GroupPoint,FarthestPointSample,GatherPoint,KnnPoint
