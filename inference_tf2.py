@@ -88,10 +88,10 @@ def compute_descriptors():
     # Model
     param = {'NoRegress': False, 'BaseScale': args.base_scale, 'Attention': True,
              'num_clusters': -1, 'num_samples': args.num_samples, 'feature_dim': args.feature_dim}
-    
+
     # Hardcode to get tf2 model
     model = Feat3dNet(False, param=param)
-    
+
     # init model
     logger.info("Trying to find a checkpoint in {}".format(args.checkpoint))
     model_find = tf.train.latest_checkpoint(args.checkpoint)
@@ -180,20 +180,23 @@ def compute_descriptors():
                                             axis=1)
             xyz_features.tofile(f)
 
+        if num_processed == 0:
+            model.summary(line_length=90, print_fn=logger.info)
+            
         num_processed += 1
         logger.info('Processed %i / %i images', num_processed, len(binFiles))
 
-    # Doesn't yet work. Supposed to write graph to summary filewriter.
-    writer = tf.summary.create_file_writer(model_savepath)
-    with writer.as_default():
-        tb_callback = tf.keras.callbacks.TensorBoard(model_savepath)
-        tb_callback.set_model(model)
+        # # Doesn't yet work. Supposed to write graph to summary filewriter.
+        # tb_callback = tf.keras.callbacks.TensorBoard(model_savepath)
+        # tb_callback.set_model(model)
 
-        tf.summary.scalar("Test", num_processed, step=num_processed)
-        
-        writer.flush()
-    logger.info("Saved model representation/graph to TensorBoard.")
-    # assert 0
+        # writer = tf.summary.create_file_writer(model_savepath)
+        # with writer.as_default():
+        #     tf.summary.scalar("Test", num_processed, step=num_processed)
+            
+        #     writer.flush()
+        # logger.info("Saved model representation/graph to TensorBoard.")
+        # assert 0
 
     model.save(model_savepath)
     logger.info("Saved inference model in {}".format(model_savepath))   # save model after everything is done

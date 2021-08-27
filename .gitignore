@@ -125,7 +125,9 @@ scripts_evaluation/results_*/
 # Datasets
 data/oxford/*
 data/oxford
-ckpt_tf2.tar.gz
+
+# Archive files
+*.tar.gz
 
 # Draft things
 draft.py
