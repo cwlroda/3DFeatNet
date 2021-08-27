@@ -68,6 +68,51 @@ It should be straightforward to run on your own data, just make sure the data is
 ## Datasets
 Refer to [scripts_data_processing/Readme.md](scripts_data_processing/Readme.md).
 
+## Conversion to ONNX
+To convert the trained model for inference into ONNX format, first wait for training to complete. Subsequently, run the `inference_example.sh` script, which will call sample data on the model so that a `SavedModel` can be built. Subsequently, it will save the TensorFlow `SavedModel` to a directory (by defaut, `./ckpt/infer_model`).
+
+Subsequently, call the `tf2onnx.convert` submodule (should be installed as part of `requirements.txt`):
+```bash
+python -m tf2onnx.convert 
+--saved-model ./inference_savedmodel/ --output model_infer.onnx \
+--load_op_libraries ./tf_ops/grouping/tf_grouping_so.so,./tf_ops/sampling/tf_sampling_so.so \
+--rename-inputs pointcloud --rename-outputs keypoints,features,attention \
+--custom-ops QueryBallPoint,GroupPoint,FarthestPointSample,GatherPoint,KnnPoint
+```
+This will save an `onnx` model named `model_infer.onnx` in the 3DFeatNet base directory. The model can then be verified visually calling `netron model_infer.onnx`.
+
+## Setting up the TensorRT development environment
+TensorRT comes with a prebuilt Docker container with TensorRT 8.x in Ubuntu 18.04 with CUDA 11.3. We modified the Dockerfile to include the resources we have been using.
+
+To setup the Docker container, first install Docker. Clone the [TensorRT](https://github.com/NVIDIA/TensorRT) and [onnx-tensorrt](https://github.com/onnx/onnx-tensorrt) repos to a convenient location. We suggest the same parent directory as the one 3DFeatNet is in, and the sample build script below works if it is.
+```bash
+ARG_IMAGENAME="tensorrt-ubuntu18.04-cuda11.3_3dfn"  # change this to your liking
+3DFN_LOC = $(pwd)
+
+sudo docker build -f ${3DFN_LOC}/docker/ubuntu-18.04_modded.Dockerfile \
+--build-arg CUDA_VERSION=11.3 --build-arg uid=$(id -u) \
+--build-arg gid=$(id -g) --tag=$ARG_IMAGENAME
+```
+To run the Docker image, run
+```bash
+sudo docker run -it -v "${3DFN_LOC}/..":"/workspace" \  # This ensures that the TensorRT and onnx-trt build folders can be found.
+-p 80 -p 6006:6008 \                                    # binds ports for HTTP and TensorBoard.
+--gpus all ${ARG_IMAGENAME}:latest
+```
+When inside the Docker image, run
+```bash
+bash 3DFeatNet/docker/startup.sh
+```
+This installs the TensorRT and onnx-trt inside the Docker image. You can also edit this script to your liking.
+
+## Running inference in ONNX
+
+## Converting ONNX to TensorRT
+
+## Running inference in TensorRT
+
+# Anything below this line is experimental
+*****
 ## Conversion to ONNX and TensorRT
 To convert the trained model for inference into ONNX format, first wait for training to complete. Subsequently, run the `inference_example.sh` script, which will call sample data on the model so that a `SavedModel` can be built. Subsequently, it will save the TensorFlow `SavedModel` to a directory (by defaut, `./ckpt/infer_model`).
 
