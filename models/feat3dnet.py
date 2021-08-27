@@ -98,6 +98,7 @@ class Feat3dNet(tf.keras.Model):
                             activation='relu' if (final_relu or i<len(mlp3) - 1) else None)
                 )
 
+    @tf.function
     def call(self, inputs, training=False, bypass_detect=None):
         '''
         Forward pass of network.
@@ -149,10 +150,10 @@ class Feat3dNet(tf.keras.Model):
             orientation = tf.atan2(orientation_xy[:, :, 1], orientation_xy[:, :, 0])
 
             # update end_points
-            # if self.train_or_infer:
-            self.end_points['keypoints'] = new_xyz
-            self.end_points['attention'] = attention
-            self.end_points['orientation'] = orientation
+            if self.train_or_infer:
+                self.end_points['keypoints'] = new_xyz
+                self.end_points['attention'] = attention
+                self.end_points['orientation'] = orientation
 
             # During training, the output of the detector is bypassed.
             if self._NoRegress:
@@ -170,19 +171,14 @@ class Feat3dNet(tf.keras.Model):
                         keypoints=new_xyz, orientations=orientation,
                         normalize_radius=True)
 
-        # if self.train_or_infer:
-        self.end_points.update(end_points_tmp)
+        if self.train_or_infer:
+            self.end_points.update(end_points_tmp)
 
         # Compute Conv2d_BN --> MaxPoolConcat --> Conv2d_BN --> MaxPoolAxis --> Conv2d_BN
         for layer in self.ext_layers:
             new_points = layer(new_points, training)
 
         new_points = tf.squeeze(new_points, [2])
-    
-        # Compute Features
-        
-        # keypoints = new_xyz
-        # features = new_points
         new_points = tf.nn.l2_normalize(new_points, axis=2, epsilon=1e-8)
 
         # further computation if Train
@@ -196,7 +192,9 @@ class Feat3dNet(tf.keras.Model):
                 # attention = tf.split(attention, 3, axis=0)[0] if attention is not None else None
                 attention = tf.split(attention, 3, axis=0)[0]
 
-        return new_xyz, new_points, attention, self.end_points
+            return new_xyz, new_points, attention, self.end_points
+        else:
+            return new_xyz, new_points, attention, {}
     
     # def update_end_points_loss(self, attention_sm, sum_positive, sum_negative):
     #     self.end_points['normalized_attention'] = attention_sm
