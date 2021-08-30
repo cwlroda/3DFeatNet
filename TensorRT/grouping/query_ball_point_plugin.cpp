@@ -239,19 +239,18 @@ DimsExprs QueryBallPointPlugin::getOutputDimensions
         outputIndex<2,
         "There are only two output tensors!"
     );
-    int batchsize = inputs[1].d[0]->getConstantValue();
-    int npoint = inputs[1].d[1]->getConstantValue();
 
     // Input2 needs to have certain dimensions (batchsize, npoint, 3)
-    DimsExprs output;
 
+    DimsExprs output(inputs[1]);        // copy constructor required!
+    // output.d[0] = inputs[1].d[0];    // batchSize
+    // output.d[1] = inputs[1].d[1];    // npoint    (same as previous)
     if (outputIndex==0){
-        output.d[0] = exprBuilder.constant(batchsize);
-        output.d[1] = exprBuilder.constant(npoint);
         output.d[2] = exprBuilder.constant(_num_samples);
+    } else if (outputIndex==1) {
+        output.nbDims = 2;
     } else {
-        output.d[0] = exprBuilder.constant(batchsize);
-        output.d[1] = exprBuilder.constant(npoint);
+        assertm(false, "Out of bounds outputIndex in getOutputDimensions");
     }
 
     return output;
@@ -372,10 +371,10 @@ int32_t QueryBallPointPlugin::enqueue
 QueryBallPointPluginCreator::QueryBallPointPluginCreator(){
     // Describe QBPPlugin's required PluginField args (radius, num_samples)
     mPluginAttributes.emplace_back(
-            PluginField("_radius", nullptr, PluginFieldType::kFLOAT32, 1));
+            PluginField("radius", nullptr, PluginFieldType::kFLOAT32, 1));
 
     mPluginAttributes.emplace_back(
-            PluginField("_num_samples", nullptr, PluginFieldType::kINT32, 1));
+            PluginField("nsample", nullptr, PluginFieldType::kINT32, 1));
 
     // Fill PluginFieldCollection with PluginField arguments metadata
     mFC.nbFields = mPluginAttributes.size();
@@ -398,29 +397,34 @@ const PluginFieldCollection* QueryBallPointPluginCreator::getFieldNames() noexce
 IPluginV2* QueryBallPointPluginCreator::createPlugin
     (const char* name, const PluginFieldCollection* fc) noexcept{
 
-    float radius;
-    int32_t num_samples;
+    float radius_init;
+    int32_t num_samples_init;
     const PluginField* fields = fc->fields;
 
     // Parse fields from PluginFieldCollection
+    // printf("\nfc has %d fields\n", fc->nbFields);
     assertm((fc->nbFields == 2), "Input PluginFiledCollection must only have 2 fields.");
     
     for (int i = 0; i < fc->nbFields; i++) {
-        if (strcmp(fields[i].name, "_radius") == 0)
+        printf("FieldCollection field %d: name: %s, type: %d\n", i, fields[i].name, fields[i].type);
+
+        if (strcmp(fields[i].name, "radius") == 0)
         {
             assertm((fields[i].type == PluginFieldType::kFLOAT32), 
                 "Provided radius parameter must have datatype float32");
-            radius = *(static_cast<const float*>(fields[i].data));
+            radius_init = *(static_cast<const float*>(fields[i].data));
+            printf("Initialized radius with value %f.\n", radius_init);
         }
-        else if (strcmp(fields[i].name, "_num_samples") == 0)
+        else if (strcmp(fields[i].name, "nsample") == 0)
         {
             assertm((fields[i].type == PluginFieldType::kINT32), 
                 "Provided num_samples parameter must have datatype int32");
-            num_samples = *(static_cast<const float*>(fields[i].data));
+            num_samples_init = *(static_cast<const int32_t*>(fields[i].data));
+            printf("Initialized nSample with value %d.\n", num_samples_init);
         }
     }
 
-    return new QueryBallPointPlugin(name, radius, num_samples);
+    return new QueryBallPointPlugin(name, radius_init, num_samples_init);
 }
 
 IPluginV2* QueryBallPointPluginCreator::deserializePlugin
