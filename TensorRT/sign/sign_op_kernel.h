@@ -20,8 +20,7 @@
 #define SIGN_OP_KERNEL_H
 #include "NvInfer.h"
 
-// Implement SignOp for int32, float32.
-void signOpLauncher(float* in, float* out);
-void signOpLauncher(int32_t* in, int32_t* out);
+template<typename T>
+void signOpLauncher(int n, T* in, T* out);
 
 #endif
