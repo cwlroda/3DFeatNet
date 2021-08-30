@@ -37,8 +37,8 @@ const int32_t _NSAMPLE = 64;    // xref inference_tf2.py (args.num_samples)
 } // namespace
 
 // Static class fields initialization
-PluginFieldCollection ClipPluginCreator::mFC{};
-std::vector<PluginField> ClipPluginCreator::mPluginAttributes;
+PluginFieldCollection QueryBallPointPluginCreator::mFC{};
+std::vector<PluginField> QueryBallPointPluginCreator::mPluginAttributes;
 
 REGISTER_TENSORRT_PLUGIN(QueryBallPointPluginCreator);
 
