@@ -406,21 +406,21 @@ IPluginV2* QueryBallPointPluginCreator::createPlugin
     assertm((fc->nbFields == 2), "Input PluginFiledCollection must only have 2 fields.");
     
     for (int i = 0; i < fc->nbFields; i++) {
-        printf("FieldCollection field %d: name: %s, type: %d\n", i, fields[i].name, fields[i].type);
+        // printf("FieldCollection field %d: name: %s, type: %d\n", i, fields[i].name, fields[i].type);
 
         if (strcmp(fields[i].name, "radius") == 0)
         {
             assertm((fields[i].type == PluginFieldType::kFLOAT32), 
                 "Provided radius parameter must have datatype float32");
             radius_init = *(static_cast<const float*>(fields[i].data));
-            printf("Initialized radius with value %f.\n", radius_init);
+            // printf("Initialized radius with value %f.\n", radius_init);
         }
         else if (strcmp(fields[i].name, "nsample") == 0)
         {
             assertm((fields[i].type == PluginFieldType::kINT32), 
                 "Provided num_samples parameter must have datatype int32");
             num_samples_init = *(static_cast<const int32_t*>(fields[i].data));
-            printf("Initialized nSample with value %d.\n", num_samples_init);
+            // printf("Initialized nSample with value %d.\n", num_samples_init);
         }
     }
 

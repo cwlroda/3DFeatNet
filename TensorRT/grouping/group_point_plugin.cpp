@@ -200,31 +200,40 @@ DimsExprs GroupPointPlugin::getOutputDimensions
     //     float32 array, values sampled from points
 
     assertm(nbInputs==2, 
-        "GroupPoint has 2 inputs:\ninput: points (b,n,3), idx (b,m,nsample)"
+        "GroupPoint has 2 inputs:\ninput: points (b,n,channel), idx (b,m,nsample)"
     );
     assertm(
-        (inputs[0].nbDims==3 && inputs[0].d[2]->getConstantValue()==3),
-        "points (input 1) has 3 dimensions and final dimension is size 3."
+        (inputs[0].nbDims==3),
+        "points (input 1) has 3 dimensions."
     );
     assertm(
-        (inputs[1].nbDims==3 && inputs[1].d[2]->getConstantValue()==3),
-        "xyz2 (input 2) is supposed to have final dimension 3."
+        (inputs[1].nbDims==3),
+        "idx (input 2) is supposed to have final dimension 3."
     );
     assertm(
         outputIndex==0,
         "There is only one output tensor from GroupPoint."
     );
-    int batchsize = inputs[1].d[0]->getConstantValue();
-    int npoint = inputs[1].d[1]->getConstantValue();
-    int nsample = inputs[1].d[2]->getConstantValue();
-    int nchannel = inputs[0].d[2]->getConstantValue();
+    // int batchsize = inputs[1].d[0]->getConstantValue();
+    // int npoint = inputs[1].d[1]->getConstantValue();
+    // int nsample = inputs[1].d[2]->getConstantValue();
+    // int nchannel = inputs[0].d[2]->getConstantValue();
 
     // Input needs to have certain dimensions (batch_size, npoint, nsample, channel) 
-    DimsExprs output;
-    output.d[0] = exprBuilder.constant(batchsize);
-    output.d[1] = exprBuilder.constant(npoint);
-    output.d[2] = exprBuilder.constant(nsample);
-    output.d[3] = exprBuilder.constant(nchannel);
+    DimsExprs output(inputs[1]);
+    output.nbDims = 4;
+    // output.d[0] = inputs[1].d[0]->getConstantValue();    // batch size
+    // output.d[1] = inputs[1].d[1]->getConstantValue();    // npoint
+    // output.d[2] = inputs[1].d[2]->getConstantValue();    // nsample
+    output.d[3] = exprBuilder.constant(   
+        inputs[0].d[2]->getConstantValue()        // nchannel
+    );
+
+    // printf("Output dimensions of GroupPoint: %d\n", output.nbDims);
+    // for(int i=0; i<output.nbDims; i++){
+    //     printf("%d\t", output.d[i]->getConstantValue());
+    // }
+    // printf("\n");
 
     return output;
 }
