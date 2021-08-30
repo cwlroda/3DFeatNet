@@ -108,16 +108,29 @@ This installs the TensorRT and onnx-trt inside the Docker image. You can also ed
 
 ## Converting ONNX to TensorRT
 To convert the ONNX files to TensorRT, start up the Docker image as detailed above.
+
+Firstly, the custom ops need to be built for TensorRT. Luckily, the CUDA function definitions can be reused.
+
+In the TensorRT container, navigate to the 3DFeatNet repo. Then, run the following:
+```bash
+cd TensorRT
+mkdir -p build && cd build
+cmake ..
+make
+cd ../..
+```
+This builds the grouping ops `QueryBallPoint` and `GroupPoint`, and puts their `.so` files in `3DFeatNet/TensorRT/build`.
+
 Navigate to the 3DFeatNet repo in the container workspace and run the following:
 ```bash
 trtexec --onnx=./onnx_models/model_infer.onnx \
---plugins=tf_ops/grouping/tf_grouping_so.so \
---plugins=tf_ops/sampling/tf_sampling_so.so \
+--plugins=./TensorRT/build/libPointNetOps.so \
 --saveEngine=./TensorRT/model_infer.lib
 ```
 If successful, it registers the inference engine in `./TensorRT/model_infer.lib`.
 
 ## Running inference in TensorRT
+
 
 ## Running inference in ONNX
 
