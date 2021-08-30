@@ -32,7 +32,7 @@ using namespace nvinfer1;
 namespace
 {
 const char* GROUPPOINT_PLUGIN_VERSION{"1"};
-const char* GROUPPOINT_PLUGIN_NAME{"GroupPointPlugin"};
+const char* GROUPPOINT_PLUGIN_NAME{"GroupPoint"};
 const int32_t _NSAMPLE = 64;    // xref inference_tf2.py (args.num_samples)
 } // namespace
 

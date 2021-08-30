@@ -32,7 +32,7 @@ using namespace nvinfer1;
 namespace
 {
 const char* QUERYBALLPOINT_PLUGIN_VERSION{"1"};
-const char* QUERYBALLPOINT_PLUGIN_NAME{"QueryBallPointPlugin"};
+const char* QUERYBALLPOINT_PLUGIN_NAME{"QueryBallPoint"};
 const int32_t _NSAMPLE = 64;    // xref inference_tf2.py (args.num_samples)
 } // namespace
 
