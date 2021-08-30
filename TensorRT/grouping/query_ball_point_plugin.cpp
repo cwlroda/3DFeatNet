@@ -1,18 +1,21 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+* By Tianyi
+* Defines the functions used in QueryBallPoint.
+*/
 
 #include "grouping_plugin.h"
 #include "NvInfer.h"
@@ -56,11 +59,31 @@ T readFromBuffer(const char*& buffer)
     return val;
 }
 
-// Define Constructors for each new Custom Layer
+// #################################################################################### //
+/*                   Function implementations for QueryBallPointPlugin                  */
+// #################################################################################### //
+
+// Default constructor for QueryBallPoint (ie)
 QueryBallPointPlugin::QueryBallPointPlugin(const std::string name,
     const float radius, const int32_t num_samples)
     : mLayerName(name), _radius(radius), _num_samples(num_samples)
 {}
+
+QueryBallPointPlugin::QueryBallPointPlugin
+    (const std::string name, const void* data, size_t length){
+
+    assertm(length==getSerializationSize(), "Serialised length must be \
+    sizeof(int32+float): radius + num_samples.");
+
+    const char* d = static_cast<const char*>(data);
+    const char* a = d;
+
+    _radius = readFromBuffer<float>(d);
+    _num_samples = readFromBuffer<int32_t>(d);
+
+    assert(d == (a + length));
+}
+
 
 // Returns the name of the plugin; ie QueryBallPoint
 AsciiChar const * QueryBallPointPlugin::getPluginType () const noexcept {
@@ -184,7 +207,15 @@ void QueryBallPointPlugin::detachFromContext () noexcept{
 
 // ~ Overriding IPluginV2DynamicExt's virtual functions
 
-/**/
+IPluginV2DynamicExt* QueryBallPointPlugin::clone () const noexcept {
+    auto plugin = new QueryBallPointPlugin(mLayerName, _radius, _num_samples);
+    plugin->setPluginNamespace(mNamespace.c_str());
+    return plugin;
+}
+
+/*
+Does what it says on the tin.
+*/
 DimsExprs QueryBallPointPlugin::getOutputDimensions
         (int32_t outputIndex, const DimsExprs *inputs, 
         int32_t nbInputs, IExprBuilder &exprBuilder) noexcept{
@@ -298,67 +329,122 @@ int32_t QueryBallPointPlugin::enqueue
         const void *const *inputs, void *const *outputs, 
         void *workspace, cudaStream_t stream) noexcept{
     
-    // todo after lunch
-    
+    assertm((inputDesc[0].dims.nbDims==3 && inputDesc[0].dims.d[2]==3), 
+        "QueryBallPoint expects (batch_size, ndataset, 3) xyz1 shape."
+    );
+    assertm((inputDesc[1].dims.nbDims==3 && inputDesc[1].dims.d[2]==3), 
+        "QueryBallPoint expects (batch_size, npoint, 3) xyz2 shape."
+    );
+    // declare 'inputs' as pointer to const pointer to const void
+    // declare 'outputs' as as pointer to const pointer to void
+    int b = inputDesc[0].dims.d[0]; // batch size
+    int n = inputDesc[0].dims.d[1];
+    int m = inputDesc[1].dims.d[1];
 
-    int batchsize = inputs[1].d[0]->getConstantValue();
-    int npoint = inputs[1].d[1]->getConstantValue();
+    // handlers for input. Should be flattened already since already in memory.
+    const float* xyz1 = static_cast<const float*>(inputs[0]);
+    const float* xyz2 = static_cast<const float*>(inputs[1]);
 
+    // handlers for output
+    int32_t* idx = static_cast<int32_t*>(outputs[0]);
+    int32_t* pts_cnt = static_cast<int32_t*>(outputs[1]);
 
     // Launch inference kernel
     queryBallPointLauncher(b, n, m, _radius, _num_samples, 
                     xyz1, xyz2, idx, pts_cnt
                     );
 
-
-    const Tensor& xyz1_tensor = context->input(0);
-    OP_REQUIRES(context, xyz1_tensor.dims()==3 && xyz1_tensor.shape().dim_size(2)==3, errors::InvalidArgument("QueryBallPoint expects (batch_size, ndataset, 3) xyz1 shape."));
-    int b = xyz1_tensor.shape().dim_size(0);
-    int n = xyz1_tensor.shape().dim_size(1);
-
-    const Tensor& xyz2_tensor = context->input(1);
-    OP_REQUIRES(context, xyz2_tensor.dims()==3 && xyz2_tensor.shape().dim_size(2)==3, errors::InvalidArgument("QueryBallPoint expects (batch_size, npoint, 3) xyz2 shape."));
-    int m = xyz2_tensor.shape().dim_size(1);
-
-    Tensor *idx_tensor = nullptr;
-    OP_REQUIRES_OK(context, context->allocate_output(0, TensorShape{b,m,nsample_}, &idx_tensor));
-    Tensor *pts_cnt_tensor = nullptr;
-    OP_REQUIRES_OK(context, context->allocate_output(1, TensorShape{b,m}, &pts_cnt_tensor));
-
-    auto xyz1_flat = xyz1_tensor.flat<float>();
-    const float *xyz1 = &(xyz1_flat(0));
-    auto xyz2_flat = xyz2_tensor.flat<float>();
-    const float *xyz2 = &(xyz2_flat(0));
-    auto idx_flat = idx_tensor->flat<int>();
-    int *idx = &(idx_flat(0));
-    auto pts_cnt_flat = pts_cnt_tensor->flat<int>();
-    int *pts_cnt = &(pts_cnt_flat(0));
-    queryBallPointLauncher(b,n,m,radius_,nsample_,xyz1,xyz2,idx,pts_cnt);
-
+    assertm( (outputDesc[0].dims.nbDims==3 && outputDesc[0].dims.d[2]==_num_samples),
+        "Output idx must have shape (batch_size, npoint, num_samples)"
+    );
+    assertm( (outputDesc[1].dims.nbDims==2) ,
+        "Output pts_cnt must have shape (batch_size, npoint)"
+    );
 
     return 0;
 }
+// #################################################################################### //
 
-// ###################################################### //
-// ###################################################### //
-// ###################################################### //
-// ###################################################### //
-// ###################################################### //
-// ###################################################### //
+// #################################################################################### //
+/*                       Functions for QueryBallPointPluginCreator                      */
+// #################################################################################### //
 
-int ClipPlugin::enqueue(int batchSize, const void* const* inputs, void* const* outputs, void*, cudaStream_t stream) noexcept
-{
-    int status = -1;
+QueryBallPointPluginCreator::QueryBallPointPluginCreator(){
+    // Describe QBPPlugin's required PluginField args (radius, num_samples)
+    mPluginAttributes.emplace_back(
+            PluginField("_radius", nullptr, PluginFieldType::kFLOAT32, 1));
 
-    // Our plugin outputs only one tensor
-    void* output = outputs[0];
+    mPluginAttributes.emplace_back(
+            PluginField("_num_samples", nullptr, PluginFieldType::kINT32, 1));
 
-    // Launch CUDA kernel wrapper and save its return value
-    status = clipInference(stream, mInputVolume * batchSize, mClipMin, mClipMax, inputs[0], output);
-
-    return status;
+    // Fill PluginFieldCollection with PluginField arguments metadata
+    mFC.nbFields = mPluginAttributes.size();
+    mFC.fields = mPluginAttributes.data();
 }
 
+const char* QueryBallPointPluginCreator::getPluginName() const noexcept{
+    return QUERYBALLPOINT_PLUGIN_NAME;
+}
+
+const char* QueryBallPointPluginCreator::getPluginVersion() const noexcept{
+    return QUERYBALLPOINT_PLUGIN_VERSION;
+}
+
+const PluginFieldCollection* QueryBallPointPluginCreator::getFieldNames() noexcept{
+    return &mFC;
+}
+
+// Creates a new instance of QueryBallPointPlugin
+IPluginV2* QueryBallPointPluginCreator::createPlugin
+    (const char* name, const PluginFieldCollection* fc) noexcept{
+
+    float radius;
+    int32_t num_samples;
+    const PluginField* fields = fc->fields;
+
+    // Parse fields from PluginFieldCollection
+    assertm((fc->nbFields == 2), "Input PluginFiledCollection must only have 2 fields.");
+    
+    for (int i = 0; i < fc->nbFields; i++) {
+        if (strcmp(fields[i].name, "_radius") == 0)
+        {
+            assertm((fields[i].type == PluginFieldType::kFLOAT32), 
+                "Provided radius parameter must have datatype float32");
+            radius = *(static_cast<const float*>(fields[i].data));
+        }
+        else if (strcmp(fields[i].name, "_num_samples") == 0)
+        {
+            assertm((fields[i].type == PluginFieldType::kINT32), 
+                "Provided num_samples parameter must have datatype int32");
+            num_samples = *(static_cast<const float*>(fields[i].data));
+        }
+    }
+
+    return new QueryBallPointPlugin(name, radius, num_samples);
+}
+
+IPluginV2* QueryBallPointPluginCreator::deserializePlugin
+    (const char* name, const void* serialData, size_t serialLength) noexcept{
+    // This object will be deleted when the network is destroyed, which will
+    // call ClipPlugin::destroy()
+    return new QueryBallPointPlugin(name, serialData, serialLength);
+}
+
+void QueryBallPointPluginCreator::setPluginNamespace
+    (const char* pluginNamespace) noexcept{
+    
+    mNamespace = pluginNamespace;
+}
+
+const char* QueryBallPointPluginCreator::getPluginNamespace() const noexcept{
+    return mNamespace.c_str();
+}
+
+// #################################################################################### //
+
+
+// Unimplemented IPluginV2 functions, keep for reference
+/*
 void ClipPlugin::configureWithFormat(const Dims* inputs, int nbInputs, const Dims* outputs, int nbOutputs,
     DataType type, PluginFormat format, int) noexcept
 {
@@ -384,77 +470,4 @@ bool ClipPlugin::supportsFormat(DataType type, PluginFormat format) const noexce
     else
         return false;
 }
-
-IPluginV2* ClipPlugin::clone() const noexcept
-{
-    auto plugin = new ClipPlugin(mLayerName, mClipMin, mClipMax);
-    plugin->setPluginNamespace(mNamespace.c_str());
-    return plugin;
-}
-
-
-ClipPluginCreator::ClipPluginCreator()
-{
-    // Describe ClipPlugin's required PluginField arguments
-    mPluginAttributes.emplace_back(PluginField("clipMin", nullptr, PluginFieldType::kFLOAT32, 1));
-    mPluginAttributes.emplace_back(PluginField("clipMax", nullptr, PluginFieldType::kFLOAT32, 1));
-
-    // Fill PluginFieldCollection with PluginField arguments metadata
-    mFC.nbFields = mPluginAttributes.size();
-    mFC.fields = mPluginAttributes.data();
-}
-
-const char* ClipPluginCreator::getPluginName() const noexcept
-{
-    return CLIP_PLUGIN_NAME;
-}
-
-const char* ClipPluginCreator::getPluginVersion() const noexcept
-{
-    return CLIP_PLUGIN_VERSION;
-}
-
-const PluginFieldCollection* ClipPluginCreator::getFieldNames() noexcept
-{
-    return &mFC;
-}
-
-IPluginV2* ClipPluginCreator::createPlugin(const char* name, const PluginFieldCollection* fc) noexcept
-{
-    float clipMin, clipMax;
-    const PluginField* fields = fc->fields;
-
-    // Parse fields from PluginFieldCollection
-    assert(fc->nbFields == 2);
-    for (int i = 0; i < fc->nbFields; i++)
-    {
-        if (strcmp(fields[i].name, "clipMin") == 0)
-        {
-            assert(fields[i].type == PluginFieldType::kFLOAT32);
-            clipMin = *(static_cast<const float*>(fields[i].data));
-        }
-        else if (strcmp(fields[i].name, "clipMax") == 0)
-        {
-            assert(fields[i].type == PluginFieldType::kFLOAT32);
-            clipMax = *(static_cast<const float*>(fields[i].data));
-        }
-    }
-    return new ClipPlugin(name, clipMin, clipMax);
-}
-
-IPluginV2* ClipPluginCreator::deserializePlugin(const char* name, const void* serialData, size_t serialLength) noexcept
-{
-    // This object will be deleted when the network is destroyed, which will
-    // call ClipPlugin::destroy()
-    return new ClipPlugin(name, serialData, serialLength);
-}
-
-void ClipPluginCreator::setPluginNamespace(const char* libNamespace) noexcept
-{
-    mNamespace = libNamespace;
-}
-
-const char* ClipPluginCreator::getPluginNamespace() const noexcept
-{
-    return mNamespace.c_str();
-}
+*/

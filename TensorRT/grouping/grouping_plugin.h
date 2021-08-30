@@ -1,19 +1,20 @@
 /*
- * Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- * 
- * Template by NVIDIA, developed by Tianyi
+Copyright (c) 2021, NVIDIA CORPORATION.  All rights reserved.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+ * Template by NVIDIA, developed by Tianyi.
+ * Declares functions for QueryBallPoint and GroupPoint operations.
  */
 
 #ifndef GROUPING_PLUGIN_H
@@ -32,14 +33,20 @@ using namespace nvinfer1;
 class QueryBallPointPlugin : public IPluginV2DynamicExt
 {
 public:
-    // Constructor
+    // Constructor for concrete parameters
     QueryBallPointPlugin(const std::string name, 
         const float radius, const int32_t num_samples);
+
+    // Construcotr for serialised data
+    QueryBallPointPlugin(const std::string name, const void* data, size_t length);
 
     // doesn't make sense to call the constructor w/o args, so delete default constructor
     QueryBallPointPlugin() = delete;
 
-    // override IPluginV2DynamicExt virtual functions
+    // ~ override IPluginV2DynamicExt's virtual functions
+
+    IPluginV2DynamicExt * 	clone () const noexcept override;
+
     DimsExprs getOutputDimensions (int32_t outputIndex, const DimsExprs *inputs, 
                     int32_t nbInputs, IExprBuilder &exprBuilder) noexcept override;
     
@@ -56,7 +63,8 @@ public:
                     const void *const *inputs, void *const *outputs, 
                     void *workspace, cudaStream_t stream) noexcept override;
 
-    // override IPluginV2Ext's virtual functions
+    // ~ override IPluginV2Ext's virtual functions
+
     nvinfer1::DataType getOutputDataType (int32_t index, nvinfer1::DataType const *inputTypes, 
                     int32_t nbInputs) const noexcept override;
 
@@ -64,7 +72,8 @@ public:
     
     void detachFromContext () noexcept override;
 
-    // override IPluginV2's virtual functions
+    // ~ override IPluginV2's virtual functions
+
     AsciiChar const * getPluginType () const noexcept override;
     
     AsciiChar const * getPluginVersion () const noexcept override;
@@ -86,9 +95,10 @@ public:
     AsciiChar const * getPluginNamespace () const noexcept override;
 
 private:
-    const std::string mLayerName;   // Name of the custom layer onject
-    const float _radius;
-    const int32_t _num_samples;
+    const std::string mLayerName;   // Name of the custom layer object
+    float _radius;
+    int32_t _num_samples;
+    std::string mNamespace;         // Name of custom namespace
 };
 
 class GroupPointPlugin : public IPluginV2DynamicExt
@@ -199,6 +209,7 @@ private:
     std::string mNamespace;
 };
 
+/*
 class ClipPlugin : public IPluginV2
 {
 public:
@@ -277,5 +288,6 @@ private:
     static std::vector<PluginField> mPluginAttributes;
     std::string mNamespace;
 };
+*/
 
-#endif
+#endif // GROUPING_PLUGIN_H
