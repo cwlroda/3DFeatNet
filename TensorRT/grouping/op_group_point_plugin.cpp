@@ -33,7 +33,6 @@ namespace
 {
 const char* GROUPPOINT_PLUGIN_VERSION{"1"};
 const char* GROUPPOINT_PLUGIN_NAME{"GroupPoint"};
-const int32_t _NSAMPLE = 64;    // xref inference_tf2.py (args.num_samples)
 } // namespace
 
 // Static class fields initialization
@@ -110,9 +109,7 @@ void GroupPointPlugin::serialize (void *buffer) const noexcept{}
 
 // This gets called when the network, builder or engine 
 // containing this plugin is destroyed.
-void GroupPointPlugin::destroy () noexcept{
-    delete this;
-}
+void GroupPointPlugin::destroy () noexcept{ delete this; }
 
 // Set the namespace that this plugin object belongs to. 
 // Ideally, all plugin objects from the same plugin library should have 
