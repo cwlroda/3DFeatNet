@@ -14,11 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 * By Tianyi
-* Defines the functions used in QueryBallPoint.
+* Defines the functions used in GroupPoint.
 */
 
-#include "grouping_plugin.h"
 #include "NvInfer.h"
+#include "grouping_plugin.h"
 #include "grouping_kernel.h"
 #include "noisy_assert.h"
 
@@ -31,16 +31,16 @@ using namespace nvinfer1;
 // Clip plugin specific constants
 namespace
 {
-const char* QUERYBALLPOINT_PLUGIN_VERSION{"1"};
-const char* QUERYBALLPOINT_PLUGIN_NAME{"QueryBallPointPlugin"};
+const char* GROUPPOINT_PLUGIN_VERSION{"1"};
+const char* GROUPPOINT_PLUGIN_NAME{"GroupPointPlugin"};
 const int32_t _NSAMPLE = 64;    // xref inference_tf2.py (args.num_samples)
 } // namespace
 
 // Static class fields initialization
-PluginFieldCollection QueryBallPointPluginCreator::mFC{};
-std::vector<PluginField> QueryBallPointPluginCreator::mPluginAttributes;
+PluginFieldCollection GroupPointPluginCreator::mFC{};
+std::vector<PluginField> GroupPointPluginCreator::mPluginAttributes;
 
-REGISTER_TENSORRT_PLUGIN(QueryBallPointPluginCreator);
+REGISTER_TENSORRT_PLUGIN(GroupPointPluginCreator);
 
 // Helper function for serializing plugin
 template <typename T>
@@ -60,62 +60,45 @@ T readFromBuffer(const char*& buffer)
 }
 
 // #################################################################################### //
-/*                   Function implementations for QueryBallPointPlugin                  */
+/*                     Function implementations for GroupPointPlugin                    */
 // #################################################################################### //
 
-// Default constructor for QueryBallPoint (ie)
-QueryBallPointPlugin::QueryBallPointPlugin(const std::string name,
-    const float radius, const int32_t num_samples)
-    : mLayerName(name), _radius(radius), _num_samples(num_samples)
-{}
+// Default constructor for GroupPoint (nothing to init)
+GroupPointPlugin::GroupPointPlugin(const std::string name){}
 
-QueryBallPointPlugin::QueryBallPointPlugin
-    (const std::string name, const void* data, size_t length){
+// Secondary constructor for GroupPoint, but similarly, nothing to init
+GroupPointPlugin::GroupPointPlugin
+    (const std::string name, const void* data, size_t length){}
 
-    assertm(length==getSerializationSize(), "Serialised length must be \
-    sizeof(int32+float): radius + num_samples.");
-
-    const char* d = static_cast<const char*>(data);
-    const char* a = d;
-
-    _radius = readFromBuffer<float>(d);
-    _num_samples = readFromBuffer<int32_t>(d);
-
-    assert(d == (a + length));
-}
-
-
-// Returns the name of the plugin; ie QueryBallPoint
-AsciiChar const * QueryBallPointPlugin::getPluginType () const noexcept {
-    return QUERYBALLPOINT_PLUGIN_NAME;
+// Returns the name of the plugin; ie GroupPoint
+AsciiChar const * GroupPointPlugin::getPluginType () const noexcept {
+    return GROUPPOINT_PLUGIN_NAME;
 }
 
 // Returns the name of version of the plugin, ie 1.0
-AsciiChar const * QueryBallPointPlugin::getPluginVersion () const noexcept {
-    return QUERYBALLPOINT_PLUGIN_VERSION;
+AsciiChar const * GroupPointPlugin::getPluginVersion () const noexcept {
+    return GROUPPOINT_PLUGIN_VERSION;
 }
 
 // get number of outputs to the plugin:
-// where {b: batch size, m: npoints, nsample: external param (args.num_sample)}
+// where {b: batch size, m: npoints, 
+//    nsample (passed in beforehand), c: channels}
 // return:
-// idx (b,m,nsample)
-// pts_cnt (b,m)
-int32_t QueryBallPointPlugin::getNbOutputs () const noexcept { return 2; }
+// output: out (b,m,nsample,c)
+int32_t GroupPointPlugin::getNbOutputs () const noexcept { return 1; }
 
 // Initialises plugin for inference, just return 0
-int32_t QueryBallPointPlugin::initialize () noexcept{ return 0; }
+int32_t GroupPointPlugin::initialize () noexcept{ return 0; }
 
 // Release resources acquired during plugin layer initialization.
 // This is called when the engine is destroyed.
-void QueryBallPointPlugin::terminate () noexcept{}
+void GroupPointPlugin::terminate () noexcept{}
 
 // Returns the size of the serialization buffer.
 // Seems to be what's needed to save the variables in this op,
 // ie the class private variables.
-size_t QueryBallPointPlugin::getSerializationSize () const noexcept{
-    // float: _radius, int32_t: _num_samples
-    return sizeof(float) + sizeof(int32_t);
-}
+// In the case of GroupPoint there is nothing to serialize.
+size_t GroupPointPlugin::getSerializationSize () const noexcept{ return 0; }
 
 /* Serialize the layer.
     Parameters:
@@ -123,35 +106,23 @@ size_t QueryBallPointPlugin::getSerializationSize () const noexcept{
         Size of buffer must be equal to value returned by 
         getSerializationSize()
 */
-void QueryBallPointPlugin::serialize (void *buffer) const noexcept{
-    char* d = static_cast<char*>(buffer);
-    const char* a = d;  // start of mem buffer
-
-    writeToBuffer(d, _radius);
-    writeToBuffer(d, _num_samples);
-
-    assertm(
-        (d == a + getSerializationSize()),
-        "Size of memory buffer in serialization must be equal to value returned by \
-        `getSerializationSize`, sizeof(int32+float)"
-    );
-}
+void GroupPointPlugin::serialize (void *buffer) const noexcept{}
 
 // This gets called when the network, builder or engine 
 // containing this plugin is destroyed.
-void QueryBallPointPlugin::destroy () noexcept{
+void GroupPointPlugin::destroy () noexcept{
     delete this;
 }
 
 // Set the namespace that this plugin object belongs to. 
 // Ideally, all plugin objects from the same plugin library should have 
 // the same namespace.
-void QueryBallPointPlugin::setPluginNamespace(AsciiChar const *pluginNamespace) noexcept{
+void GroupPointPlugin::setPluginNamespace(AsciiChar const *pluginNamespace) noexcept{
     this->mNamespace = pluginNamespace;
 }
 
 // Return the namespace of the plugin object
-AsciiChar const * QueryBallPointPlugin::getPluginNamespace () const noexcept{
+AsciiChar const * GroupPointPlugin::getPluginNamespace () const noexcept{
     return this->mNamespace.c_str();
 }
 
@@ -164,16 +135,16 @@ or `DataType::kFLOAT` if the layer has no inputs.
 
 The returned data type must have a format that is supported by the plugin.
 */
-nvinfer1::DataType QueryBallPointPlugin::getOutputDataType 
+nvinfer1::DataType GroupPointPlugin::getOutputDataType 
         (int32_t index, nvinfer1::DataType const *inputTypes, 
         int32_t nbInputs) const noexcept{
     assertm(nbInputs==2,
-        "QueryBallPoint has 2 inputs:\ninput: xyz1 (b,n,3), xyz2 (b,m,3)"
+        "GroupPoint has 2 inputs:\ninput: points (b,n,3), idx (b,m,nsample)"
     );
-    assertm(index<2, "Only two outputs to QueryBallPoint.");
-    // QueryBallPoint returns idx(b,n,nsample), pts_cnt (b,m)
-    // both idx and pnts_cnt are int32.
-    return DataType::kINT32;
+    assertm(index==0, "Only one output to GroupPoint.");
+    // GroupPoint returns (batch_size, npoint, nsample, channel)
+    // a float32 array
+    return DataType::kFLOAT;
 }
 
 /*
@@ -185,11 +156,11 @@ Inputs:
     cublas:	    The cublas context handle of the execution context
     allocator:  The allocator used by the execution context
 */
-void QueryBallPointPlugin::attachToContext 
+void GroupPointPlugin::attachToContext 
         (cudnnContext *, cublasContext *, IGpuAllocator *) noexcept{
     // not sure how to use this...
     // TODO get rid of this when safe
-    printf("### Called QueryBallPointPlugin::attachToContext ###\n");
+    printf("### Called GroupPointPlugin::attachToContext ###\n");
 }
 
 /*
@@ -199,16 +170,16 @@ destroyed or the context resources are unassigned from the context.
 
 If the plugin owns per-context resource, it can be released here.
 */
-void QueryBallPointPlugin::detachFromContext () noexcept{
+void GroupPointPlugin::detachFromContext () noexcept{
     // not sure how to use this...
     // TODO get rid of this when safe
-    printf("### Called QueryBallPointPlugin::detachFromContext ###\n");
+    printf("### Called GroupPointPlugin::detachFromContext ###\n");
 }
 
 // ~ Overriding IPluginV2DynamicExt's virtual functions
 
-IPluginV2DynamicExt* QueryBallPointPlugin::clone () const noexcept {
-    auto plugin = new QueryBallPointPlugin(mLayerName, _radius, _num_samples);
+IPluginV2DynamicExt* GroupPointPlugin::clone () const noexcept {
+    auto plugin = new GroupPointPlugin(mLayerName);
     plugin->setPluginNamespace(mNamespace.c_str());
     return plugin;
 }
@@ -216,43 +187,44 @@ IPluginV2DynamicExt* QueryBallPointPlugin::clone () const noexcept {
 /*
 Does what it says on the tin.
 */
-DimsExprs QueryBallPointPlugin::getOutputDimensions
+DimsExprs GroupPointPlugin::getOutputDimensions
         (int32_t outputIndex, const DimsExprs *inputs, 
         int32_t nbInputs, IExprBuilder &exprBuilder) noexcept{
     // validate input args
-    // QueryBallPoint has 2 inputs:
-        // Attrs: radius (1), nsample (1)
-        // Inputs: xyz1 (b,n,3), xyz2 (b,m,3)
-        // Outputs: output1(b, m, nsample), output2(b,m)
+
+    // Input:
+    //     points: (batch_size, ndataset, channel) float32 arr, points to sample from
+    //     idx: (batch_size, npoint, nsample) int32 arr, indices to points
+    // Output:
+    //     out: (batch_size, npoint, nsample, channel) 
+    //     float32 array, values sampled from points
+
     assertm(nbInputs==2, 
-        "QueryBallPoint has 2 inputs:\ninput: xyz1 (b,n,3), xyz2 (b,m,3)"
+        "GroupPoint has 2 inputs:\ninput: points (b,n,3), idx (b,m,nsample)"
     );
     assertm(
-        inputs[0].nbDims==3,
-        "xyz1 (input 1) is supposed to have final dimension 3."
+        (inputs[0].nbDims==3 && inputs[0].d[2]->getConstantValue()==3),
+        "points (input 1) has 3 dimensions and final dimension is size 3."
     );
     assertm(
-        inputs[1].nbDims==3,
+        (inputs[1].nbDims==3 && inputs[1].d[2]->getConstantValue()==3),
         "xyz2 (input 2) is supposed to have final dimension 3."
     );
     assertm(
-        outputIndex<2,
-        "There are only two output tensors!"
+        outputIndex==0,
+        "There is only one output tensor from GroupPoint."
     );
     int batchsize = inputs[1].d[0]->getConstantValue();
     int npoint = inputs[1].d[1]->getConstantValue();
+    int nsample = inputs[1].d[2]->getConstantValue();
+    int nchannel = inputs[0].d[2]->getConstantValue();
 
-    // Input2 needs to have certain dimensions (batchsize, npoint, 3)
+    // Input needs to have certain dimensions (batch_size, npoint, nsample, channel) 
     DimsExprs output;
-
-    if (outputIndex==0){
-        output.d[0] = exprBuilder.constant(batchsize);
-        output.d[1] = exprBuilder.constant(npoint);
-        output.d[2] = exprBuilder.constant(_num_samples);
-    } else {
-        output.d[0] = exprBuilder.constant(batchsize);
-        output.d[1] = exprBuilder.constant(npoint);
-    }
+    output.d[0] = exprBuilder.constant(batchsize);
+    output.d[1] = exprBuilder.constant(npoint);
+    output.d[2] = exprBuilder.constant(nsample);
+    output.d[3] = exprBuilder.constant(nchannel);
 
     return output;
 }
@@ -263,37 +235,41 @@ indexed by pos.
 
 Pos must be within (nbInputs+nbOutputs-1).
 */
-bool QueryBallPointPlugin::supportsFormatCombination 
+bool GroupPointPlugin::supportsFormatCombination 
         (int32_t pos, const PluginTensorDesc *inOut, 
         int32_t nbInputs, int32_t nbOutputs) noexcept{
 
     // Network supports:
-    // FP32 NCHW for both inputs.
-    // int32 outputs.
+    // FP32 NHWC for both inputs.
+    // float32 outputs.
 
-    assertm( (0<=pos && pos<4), 
-        "Position should be between 0-3 (2 inputs, 2 outputs)"
+    assertm( (0<=pos && pos<3), 
+        "Position should be between 0-2 (2 inputs, 1 output)"
         );
 
     // Check if outputs are int32 
-    if (pos >= 2){
-        return inOut[pos].type == DataType::kINT32;         // outputs int32
-    } else {
-        return inOut[pos].type == DataType::kFLOAT &&       // float32
-            inOut[pos].format == TensorFormat::kLINEAR;     // NCHW
+    switch (pos)
+    {
+    case 0:
+        return inOut[pos].type == DataType::kFLOAT &&
+            inOut[pos].format == TensorFormat::kHWC; // points: float array in NHWC
+    case 1:
+        return inOut[pos].type == DataType::kINT32; // idx, int32 array
+    case 2:
+        return inOut[pos].type == DataType::kFLOAT; // output is a float array
+    default:
+        return false;
     }
-
-    return false;
 }
 
 /*
 Used to configure any plugins required by this given plugin (none in this case)
 */
-void QueryBallPointPlugin::configurePlugin 
+void GroupPointPlugin::configurePlugin 
         (const DynamicPluginTensorDesc *in, int32_t nbInputs,
         const DynamicPluginTensorDesc *out, int32_t nbOutputs) noexcept{
     // TODO: Get rid of this when figured out safe.
-    printf("### Called QueryBallPointPlugin::configurePlugin ###\n");
+    printf("### Called GroupPointPlugin::configurePlugin ###\n");
 }
 
 /*
@@ -304,7 +280,7 @@ the given size or any smaller problem.
 
 As this plugin computes data in-place, we don't need this.
 */
-size_t QueryBallPointPlugin::getWorkspaceSize
+size_t GroupPointPlugin::getWorkspaceSize
         (const PluginTensorDesc *inputs, int32_t nbInputs, 
         const PluginTensorDesc *outputs, int32_t nbOutputs) const noexcept{
     // TODO: Figure this out
@@ -324,119 +300,96 @@ Inputs:
 Returns
     0 for success, else non-zero (which will cause engine termination).
 */
-int32_t QueryBallPointPlugin::enqueue 
+int32_t GroupPointPlugin::enqueue 
         (const PluginTensorDesc *inputDesc, const PluginTensorDesc *outputDesc, 
         const void *const *inputs, void *const *outputs, 
         void *workspace, cudaStream_t stream) noexcept{
-    
-    assertm((inputDesc[0].dims.nbDims==3 && inputDesc[0].dims.d[2]==3), 
-        "QueryBallPoint expects (batch_size, ndataset, 3) xyz1 shape."
+    /*
+    Input:
+        points: (batch_size, ndataset, channel) float32 array, points to sample from
+        idx: (batch_size, npoint, nsample) int32 array, indices to points
+    Output:
+        out: (batch_size, npoint, nsample, channel) float32 array, values sampled from points
+    */
+    assertm((inputDesc[0].dims.nbDims==3), 
+        "GroupPoint expects (batch_size, ndataset, channel) points shape."
     );
-    assertm((inputDesc[1].dims.nbDims==3 && inputDesc[1].dims.d[2]==3), 
-        "QueryBallPoint expects (batch_size, npoint, 3) xyz2 shape."
+    assertm((inputDesc[1].dims.nbDims==3), 
+        "GroupPoint expects (batch_size, npoint, nsample) idx shape."
     );
-    // declare 'inputs' as pointer to const pointer to const void
-    // declare 'outputs' as as pointer to const pointer to void
-    int b = inputDesc[0].dims.d[0]; // batch size
-    int n = inputDesc[0].dims.d[1];
-    int m = inputDesc[1].dims.d[1];
+    // 'inputs' is a pointer to const pointer to const void
+    // 'outputs' is a pointer to const pointer to void
+    int b = inputDesc[0].dims.d[0];         // batch size
+    int n = inputDesc[0].dims.d[1];  // ndataset
+    int c = inputDesc[0].dims.d[2];  // nchannel
+    int m = inputDesc[1].dims.d[1];    // npoint
+    int nsample = inputDesc[1].dims.d[2];   // nsample
 
     // handlers for input. Should be flattened already since already in memory.
-    const float* xyz1 = static_cast<const float*>(inputs[0]);
-    const float* xyz2 = static_cast<const float*>(inputs[1]);
+    const float* points = static_cast<const float*>(inputs[0]);
+    const int32_t* idx = static_cast<const int32_t*>(inputs[1]);
 
     // handlers for output
-    int32_t* idx = static_cast<int32_t*>(outputs[0]);
-    int32_t* pts_cnt = static_cast<int32_t*>(outputs[1]);
+    float* out = static_cast<float*>(outputs[0]);
 
     // Launch inference kernel
-    queryBallPointLauncher(b, n, m, _radius, _num_samples, 
-                    xyz1, xyz2, idx, pts_cnt
-                    );
+    groupPointLauncher(b,n,c,m,nsample,points,idx,out);
 
-    assertm( (outputDesc[0].dims.nbDims==3 && outputDesc[0].dims.d[2]==_num_samples),
-        "Output idx must have shape (batch_size, npoint, num_samples)"
+    assertm( (outputDesc[0].dims.nbDims==4),
+        "Output idx must have shape (batch_size, npoint, nsample, channel)"
     );
-    assertm( (outputDesc[1].dims.nbDims==2) ,
-        "Output pts_cnt must have shape (batch_size, npoint)"
-    );
-
     return 0;
 }
 // #################################################################################### //
 
 // #################################################################################### //
-/*                       Functions for QueryBallPointPluginCreator                      */
+/*                         Functions for GroupPointPluginCreator                        */
 // #################################################################################### //
 
-QueryBallPointPluginCreator::QueryBallPointPluginCreator(){
-    // Describe QBPPlugin's required PluginField args (radius, num_samples)
-    mPluginAttributes.emplace_back(
-            PluginField("_radius", nullptr, PluginFieldType::kFLOAT32, 1));
-
-    mPluginAttributes.emplace_back(
-            PluginField("_num_samples", nullptr, PluginFieldType::kINT32, 1));
-
-    // Fill PluginFieldCollection with PluginField arguments metadata
-    mFC.nbFields = mPluginAttributes.size();
-    mFC.fields = mPluginAttributes.data();
+GroupPointPluginCreator::GroupPointPluginCreator(){
+    // Describe GroupPointPlugin's required PluginField args. 
+    // But GroupPointPlugin has no args, so it's blank.
 }
 
-const char* QueryBallPointPluginCreator::getPluginName() const noexcept{
-    return QUERYBALLPOINT_PLUGIN_NAME;
+const char* GroupPointPluginCreator::getPluginName() const noexcept{
+    return GROUPPOINT_PLUGIN_NAME;
 }
 
-const char* QueryBallPointPluginCreator::getPluginVersion() const noexcept{
-    return QUERYBALLPOINT_PLUGIN_VERSION;
+const char* GroupPointPluginCreator::getPluginVersion() const noexcept{
+    return GROUPPOINT_PLUGIN_VERSION;
 }
 
-const PluginFieldCollection* QueryBallPointPluginCreator::getFieldNames() noexcept{
+const PluginFieldCollection* GroupPointPluginCreator::getFieldNames() noexcept{
     return &mFC;
 }
 
-// Creates a new instance of QueryBallPointPlugin
-IPluginV2* QueryBallPointPluginCreator::createPlugin
+// Creates a new instance of GroupPointPlugin
+IPluginV2* GroupPointPluginCreator::createPlugin
     (const char* name, const PluginFieldCollection* fc) noexcept{
-
-    float radius;
-    int32_t num_samples;
-    const PluginField* fields = fc->fields;
+    
+    // Unused variable, so it's commented out for now.
+    // const PluginField* fields = fc->fields;
 
     // Parse fields from PluginFieldCollection
-    assertm((fc->nbFields == 2), "Input PluginFiledCollection must only have 2 fields.");
+    // assertm((fc->nbFields == 0), "Input PluginFiledCollection has 0 fields.");
     
-    for (int i = 0; i < fc->nbFields; i++) {
-        if (strcmp(fields[i].name, "_radius") == 0)
-        {
-            assertm((fields[i].type == PluginFieldType::kFLOAT32), 
-                "Provided radius parameter must have datatype float32");
-            radius = *(static_cast<const float*>(fields[i].data));
-        }
-        else if (strcmp(fields[i].name, "_num_samples") == 0)
-        {
-            assertm((fields[i].type == PluginFieldType::kINT32), 
-                "Provided num_samples parameter must have datatype int32");
-            num_samples = *(static_cast<const float*>(fields[i].data));
-        }
-    }
-
-    return new QueryBallPointPlugin(name, radius, num_samples);
+    return new GroupPointPlugin(name);
 }
 
-IPluginV2* QueryBallPointPluginCreator::deserializePlugin
+IPluginV2* GroupPointPluginCreator::deserializePlugin
     (const char* name, const void* serialData, size_t serialLength) noexcept{
     // This object will be deleted when the network is destroyed, which will
     // call ClipPlugin::destroy()
-    return new QueryBallPointPlugin(name, serialData, serialLength);
+    return new GroupPointPlugin(name, serialData, serialLength);
 }
 
-void QueryBallPointPluginCreator::setPluginNamespace
+void GroupPointPluginCreator::setPluginNamespace
     (const char* pluginNamespace) noexcept{
     
     mNamespace = pluginNamespace;
 }
 
-const char* QueryBallPointPluginCreator::getPluginNamespace() const noexcept{
+const char* GroupPointPluginCreator::getPluginNamespace() const noexcept{
     return mNamespace.c_str();
 }
 

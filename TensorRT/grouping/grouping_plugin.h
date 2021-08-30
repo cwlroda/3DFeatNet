@@ -37,7 +37,7 @@ public:
     QueryBallPointPlugin(const std::string name, 
         const float radius, const int32_t num_samples);
 
-    // Construcotr for serialised data
+    // Constructor for serialised data
     QueryBallPointPlugin(const std::string name, const void* data, size_t length);
 
     // doesn't make sense to call the constructor w/o args, so delete default constructor
@@ -103,13 +103,20 @@ private:
 
 class GroupPointPlugin : public IPluginV2DynamicExt
 {
-    // Constructor
+public:
+    // Constructor for concrete parameters
     GroupPointPlugin(const std::string name);
+
+    // Constructor for serialised data
+    GroupPointPlugin(const std::string name, const void* data, size_t length);
 
     // doesn't make sense to call the constructor w/o args, so delete default constructor
     GroupPointPlugin() = delete;
 
-    // override IPluginV2DynamicExt virtual functions
+    // ~ override IPluginV2DynamicExt's virtual functions
+
+    IPluginV2DynamicExt * 	clone () const noexcept override;
+
     DimsExprs getOutputDimensions (int32_t outputIndex, const DimsExprs *inputs, 
                     int32_t nbInputs, IExprBuilder &exprBuilder) noexcept override;
     
@@ -126,7 +133,8 @@ class GroupPointPlugin : public IPluginV2DynamicExt
                     const void *const *inputs, void *const *outputs, 
                     void *workspace, cudaStream_t stream) noexcept override;
 
-    // override IPluginV2Ext's virtual functions
+    // ~ override IPluginV2Ext's virtual functions
+
     nvinfer1::DataType getOutputDataType (int32_t index, nvinfer1::DataType const *inputTypes, 
                     int32_t nbInputs) const noexcept override;
 
@@ -134,7 +142,8 @@ class GroupPointPlugin : public IPluginV2DynamicExt
     
     void detachFromContext () noexcept override;
 
-    // override IPluginV2's virtual functions
+    // ~ override IPluginV2's virtual functions
+
     AsciiChar const * getPluginType () const noexcept override;
     
     AsciiChar const * getPluginVersion () const noexcept override;
@@ -156,7 +165,8 @@ class GroupPointPlugin : public IPluginV2DynamicExt
     AsciiChar const * getPluginNamespace () const noexcept override;
 
 private:
-    const std::string mLayerName;   // Name of the custom layer onject
+    const std::string mLayerName;   // Name of the custom layer object
+    std::string mNamespace;         // Name of custom namespace
 };
 
 class QueryBallPointPluginCreator : public IPluginCreator

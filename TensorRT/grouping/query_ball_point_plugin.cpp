@@ -17,8 +17,8 @@ limitations under the License.
 * Defines the functions used in QueryBallPoint.
 */
 
-#include "grouping_plugin.h"
 #include "NvInfer.h"
+#include "grouping_plugin.h"
 #include "grouping_kernel.h"
 #include "noisy_assert.h"
 
@@ -268,7 +268,7 @@ bool QueryBallPointPlugin::supportsFormatCombination
         int32_t nbInputs, int32_t nbOutputs) noexcept{
 
     // Network supports:
-    // FP32 NCHW for both inputs.
+    // FP32 NHWC for both inputs.
     // int32 outputs.
 
     assertm( (0<=pos && pos<4), 
@@ -280,7 +280,7 @@ bool QueryBallPointPlugin::supportsFormatCombination
         return inOut[pos].type == DataType::kINT32;         // outputs int32
     } else {
         return inOut[pos].type == DataType::kFLOAT &&       // float32
-            inOut[pos].format == TensorFormat::kLINEAR;     // NCHW
+            inOut[pos].format == TensorFormat::kHWC;     // NHWC
     }
 
     return false;
