@@ -78,7 +78,7 @@ python -m tf2onnx.convert \
 --load_op_libraries ./tf_ops/grouping/tf_grouping_so.so,./tf_ops/sampling/tf_sampling_so.so \
 --rename-inputs pointcloud --rename-outputs keypoints,features,attention \
 --custom-ops QueryBallPoint,GroupPoint,FarthestPointSample,GatherPoint,KnnPoint \
---opset 11  # Can be changed as per requirements in trtexec
+--opset 13  # Can be changed as per requirements in trtexec
 ```
 This will save an `onnx` model named `model_infer.onnx` in the 3DFeatNet base directory. The model can then be verified visually calling `netron model_infer.onnx`.
 
@@ -113,18 +113,21 @@ Firstly, the custom ops need to be built for TensorRT. Luckily, the CUDA functio
 
 In the TensorRT container, navigate to the 3DFeatNet repo. Then, run the following:
 ```bash
-cd TensorRT
-mkdir -p build && cd build
+cd TensorRT/grouping; mkdir -p build && cd build
 cmake ..
 make
-cd ../..
+cd ../../sign; mkdir -p build && cd build
+cmake ..
+make
+cd ../../..
 ```
 This builds the grouping ops `QueryBallPoint` and `GroupPoint`, and puts their `.so` files in `3DFeatNet/TensorRT/build`.
 
 Navigate to the 3DFeatNet repo in the container workspace and run the following:
 ```bash
 trtexec --onnx=./onnx_models/model_infer.onnx \
---plugins=./TensorRT/build/libPointNetOps.so \
+--plugins=./TensorRT/grouping/build/libPointNetGroupingOps.so \
+--plugins=./TensorRT/grouping/sign/libSignOps.so \
 --saveEngine=./TensorRT/model_infer.lib
 ```
 If successful, it registers the inference engine in `./TensorRT/model_infer.lib`.
