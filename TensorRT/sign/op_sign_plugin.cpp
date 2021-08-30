@@ -14,12 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 
 * By Tianyi
-* Defines the functions used in QueryBallPoint.
+* Defines the functions used in SignOp.
 */
 
 #include "NvInfer.h"
-#include "grouping_plugin.h"
-#include "grouping_kernel.h"
+#include "sign_op_plugin.h"
+#include "sign_op_kernel.h"
 #include "noisy_assert.h"
 
 #include <cassert>
@@ -31,16 +31,15 @@ using namespace nvinfer1;
 // Clip plugin specific constants
 namespace
 {
-const char* QUERYBALLPOINT_PLUGIN_VERSION{"1"};
-const char* QUERYBALLPOINT_PLUGIN_NAME{"QueryBallPoint"};
-const int32_t _NSAMPLE = 64;    // xref inference_tf2.py (args.num_samples)
+const char* SIGN_OP_PLUGIN_VERSION{"1"};
+const char* SIGN_OP_PLUGIN_NAME{"Sign"};
 } // namespace
 
 // Static class fields initialization
-PluginFieldCollection QueryBallPointPluginCreator::mFC{};
-std::vector<PluginField> QueryBallPointPluginCreator::mPluginAttributes;
+PluginFieldCollection SignOpPluginCreator::mFC{};
+std::vector<PluginField> SignOpPluginCreator::mPluginAttributes;
 
-REGISTER_TENSORRT_PLUGIN(QueryBallPointPluginCreator);
+REGISTER_TENSORRT_PLUGIN(SignOpPluginCreator);
 
 // Helper function for serializing plugin
 template <typename T>
@@ -60,62 +59,39 @@ T readFromBuffer(const char*& buffer)
 }
 
 // #################################################################################### //
-/*                   Function implementations for QueryBallPointPlugin                  */
+/*                       Function implementations for SignOpPlugin                      */
 // #################################################################################### //
 
-// Default constructor for QueryBallPoint (ie)
-QueryBallPointPlugin::QueryBallPointPlugin(const std::string name,
-    const float radius, const int32_t num_samples)
-    : mLayerName(name), _radius(radius), _num_samples(num_samples)
-{}
+// Default constructor for SignOp. No vars to implement.
+SignOpPlugin::SignOpPlugin(const std::string name) {}
 
-QueryBallPointPlugin::QueryBallPointPlugin
-    (const std::string name, const void* data, size_t length){
+SignOpPlugin::SignOpPlugin
+    (const std::string name, const void* data, size_t length){}
 
-    assertm(length==getSerializationSize(), "Serialised length must be \
-    sizeof(int32+float): radius + num_samples.");
-
-    const char* d = static_cast<const char*>(data);
-    const char* a = d;
-
-    _radius = readFromBuffer<float>(d);
-    _num_samples = readFromBuffer<int32_t>(d);
-
-    assert(d == (a + length));
-}
-
-
-// Returns the name of the plugin; ie QueryBallPoint
-AsciiChar const * QueryBallPointPlugin::getPluginType () const noexcept {
-    return QUERYBALLPOINT_PLUGIN_NAME;
+// Returns the name of the plugin; ie SignOp
+AsciiChar const * SignOpPlugin::getPluginType () const noexcept {
+    return SIGN_OP_PLUGIN_NAME;
 }
 
 // Returns the name of version of the plugin, ie 1.0
-AsciiChar const * QueryBallPointPlugin::getPluginVersion () const noexcept {
-    return QUERYBALLPOINT_PLUGIN_VERSION;
+AsciiChar const * SignOpPlugin::getPluginVersion () const noexcept {
+    return SIGN_OP_PLUGIN_VERSION;
 }
 
-// get number of outputs to the plugin:
-// where {b: batch size, m: npoints, nsample: external param (args.num_sample)}
-// return:
-// idx (b,m,nsample)
-// pts_cnt (b,m)
-int32_t QueryBallPointPlugin::getNbOutputs () const noexcept { return 2; }
+// get number of outputs to the plugin
+int32_t SignOpPlugin::getNbOutputs () const noexcept { return 1; }
 
 // Initialises plugin for inference, just return 0
-int32_t QueryBallPointPlugin::initialize () noexcept{ return 0; }
+int32_t SignOpPlugin::initialize () noexcept{ return 0; }
 
 // Release resources acquired during plugin layer initialization.
 // This is called when the engine is destroyed.
-void QueryBallPointPlugin::terminate () noexcept{}
+void SignOpPlugin::terminate () noexcept{}
 
 // Returns the size of the serialization buffer.
 // Seems to be what's needed to save the variables in this op,
 // ie the class private variables.
-size_t QueryBallPointPlugin::getSerializationSize () const noexcept{
-    // float: _radius, int32_t: _num_samples
-    return sizeof(float) + sizeof(int32_t);
-}
+size_t SignOpPlugin::getSerializationSize () const noexcept{ return 0; }
 
 /* Serialize the layer.
     Parameters:
@@ -123,35 +99,21 @@ size_t QueryBallPointPlugin::getSerializationSize () const noexcept{
         Size of buffer must be equal to value returned by 
         getSerializationSize()
 */
-void QueryBallPointPlugin::serialize (void *buffer) const noexcept{
-    char* d = static_cast<char*>(buffer);
-    const char* a = d;  // start of mem buffer
-
-    writeToBuffer(d, _radius);
-    writeToBuffer(d, _num_samples);
-
-    assertm(
-        (d == a + getSerializationSize()),
-        "Size of memory buffer in serialization must be equal to value returned by \
-        `getSerializationSize`, sizeof(int32+float)"
-    );
-}
+void SignOpPlugin::serialize (void *buffer) const noexcept{}
 
 // This gets called when the network, builder or engine 
 // containing this plugin is destroyed.
-void QueryBallPointPlugin::destroy () noexcept{
-    delete this;
-}
+void SignOpPlugin::destroy () noexcept{ delete this; }
 
 // Set the namespace that this plugin object belongs to. 
 // Ideally, all plugin objects from the same plugin library should have 
 // the same namespace.
-void QueryBallPointPlugin::setPluginNamespace(AsciiChar const *pluginNamespace) noexcept{
+void SignOpPlugin::setPluginNamespace(AsciiChar const *pluginNamespace) noexcept{
     this->mNamespace = pluginNamespace;
 }
 
 // Return the namespace of the plugin object
-AsciiChar const * QueryBallPointPlugin::getPluginNamespace () const noexcept{
+AsciiChar const * SignOpPlugin::getPluginNamespace () const noexcept{
     return this->mNamespace.c_str();
 }
 
@@ -164,16 +126,14 @@ or `DataType::kFLOAT` if the layer has no inputs.
 
 The returned data type must have a format that is supported by the plugin.
 */
-nvinfer1::DataType QueryBallPointPlugin::getOutputDataType 
+nvinfer1::DataType SignOpPlugin::getOutputDataType 
         (int32_t index, nvinfer1::DataType const *inputTypes, 
         int32_t nbInputs) const noexcept{
-    assertm(nbInputs==2,
-        "QueryBallPoint has 2 inputs:\ninput: xyz1 (b,n,3), xyz2 (b,m,3)"
-    );
-    assertm(index<2, "Only two outputs to QueryBallPoint.");
-    // QueryBallPoint returns idx(b,n,nsample), pts_cnt (b,m)
+    assertm(nbInputs==1, "SignOp has 1 input.");
+    assertm(index<1, "Only one output to SignOp.");
+    // SignOp returns idx(b,n,nsample), pts_cnt (b,m)
     // both idx and pnts_cnt are int32.
-    return DataType::kINT32;
+    return inputTypes[0];   // same output data type as input
 }
 
 /*
@@ -185,11 +145,11 @@ Inputs:
     cublas:	    The cublas context handle of the execution context
     allocator:  The allocator used by the execution context
 */
-void QueryBallPointPlugin::attachToContext 
+void SignOpPlugin::attachToContext 
         (cudnnContext *, cublasContext *, IGpuAllocator *) noexcept{
     // not sure how to use this...
     // TODO get rid of this when safe
-    printf("### Called QueryBallPointPlugin::attachToContext ###\n");
+    printf("### Called SignOpPlugin::attachToContext ###\n");
 }
 
 /*
@@ -199,16 +159,16 @@ destroyed or the context resources are unassigned from the context.
 
 If the plugin owns per-context resource, it can be released here.
 */
-void QueryBallPointPlugin::detachFromContext () noexcept{
+void SignOpPlugin::detachFromContext () noexcept{
     // not sure how to use this...
     // TODO get rid of this when safe
-    printf("### Called QueryBallPointPlugin::detachFromContext ###\n");
+    printf("### Called SignOpPlugin::detachFromContext ###\n");
 }
 
 // ~ Overriding IPluginV2DynamicExt's virtual functions
 
-IPluginV2DynamicExt* QueryBallPointPlugin::clone () const noexcept {
-    auto plugin = new QueryBallPointPlugin(mLayerName, _radius, _num_samples);
+IPluginV2DynamicExt* SignOpPlugin::clone () const noexcept {
+    auto plugin = new SignOpPlugin(mLayerName);
     plugin->setPluginNamespace(mNamespace.c_str());
     return plugin;
 }
@@ -216,43 +176,14 @@ IPluginV2DynamicExt* QueryBallPointPlugin::clone () const noexcept {
 /*
 Does what it says on the tin.
 */
-DimsExprs QueryBallPointPlugin::getOutputDimensions
+DimsExprs SignOpPlugin::getOutputDimensions
         (int32_t outputIndex, const DimsExprs *inputs, 
         int32_t nbInputs, IExprBuilder &exprBuilder) noexcept{
     // validate input args
-    // QueryBallPoint has 2 inputs:
-        // Attrs: radius (1), nsample (1)
-        // Inputs: xyz1 (b,n,3), xyz2 (b,m,3)
-        // Outputs: output1(b, m, nsample), output2(b,m)
-    assertm(nbInputs==2, 
-        "QueryBallPoint has 2 inputs:\ninput: xyz1 (b,n,3), xyz2 (b,m,3)"
-    );
-    assertm(
-        inputs[0].nbDims==3,
-        "xyz1 (input 1) is supposed to have final dimension 3."
-    );
-    assertm(
-        inputs[1].nbDims==3,
-        "xyz2 (input 2) is supposed to have final dimension 3."
-    );
-    assertm(
-        outputIndex<2,
-        "There are only two output tensors!"
-    );
+    assertm(nbInputs==1, "SignOp has 1 input.");
+    assertm(outputIndex<1, "Only one output to SignOp.");
 
-    // Input2 needs to have certain dimensions (batchsize, npoint, 3)
-
-    DimsExprs output(inputs[1]);        // copy constructor required!
-    // output.d[0] = inputs[1].d[0];    // batchSize
-    // output.d[1] = inputs[1].d[1];    // npoint    (same as previous)
-    if (outputIndex==0){
-        output.d[2] = exprBuilder.constant(_num_samples);
-    } else if (outputIndex==1) {
-        output.nbDims = 2;
-    } else {
-        assertm(false, "Out of bounds outputIndex in getOutputDimensions");
-    }
-
+    DimsExprs output(inputs[0]);        // Same dimension as output
     return output;
 }
 
@@ -262,7 +193,7 @@ indexed by pos.
 
 Pos must be within (nbInputs+nbOutputs-1).
 */
-bool QueryBallPointPlugin::supportsFormatCombination 
+bool SignOpPlugin::supportsFormatCombination 
         (int32_t pos, const PluginTensorDesc *inOut, 
         int32_t nbInputs, int32_t nbOutputs) noexcept{
 
@@ -270,29 +201,22 @@ bool QueryBallPointPlugin::supportsFormatCombination
     // FP32 NHWC for both inputs.
     // int32 outputs.
 
-    assertm( (0<=pos && pos<4), 
-        "Position should be between 0-3 (2 inputs, 2 outputs)"
+    assertm( (0<=pos && pos<2), 
+        "Position should be between 0-1 (1 inputs, 1 outputs)"
         );
 
     // Check if outputs are int32 
-    if (pos >= 2){
-        return inOut[pos].type == DataType::kINT32;         // outputs int32
-    } else {
-        return inOut[pos].type == DataType::kFLOAT &&       // float32
-            inOut[pos].format == TensorFormat::kHWC;     // NHWC
-    }
-
-    return false;
+    return inOut[0].type == inOut[1].type;
 }
 
 /*
 Used to configure any plugins required by this given plugin (none in this case)
 */
-void QueryBallPointPlugin::configurePlugin 
+void SignOpPlugin::configurePlugin 
         (const DynamicPluginTensorDesc *in, int32_t nbInputs,
         const DynamicPluginTensorDesc *out, int32_t nbOutputs) noexcept{
     // TODO: Get rid of this when figured out safe.
-    printf("### Called QueryBallPointPlugin::configurePlugin ###\n");
+    printf("### Called SignOpPlugin::configurePlugin ###\n");
 }
 
 /*
@@ -303,7 +227,7 @@ the given size or any smaller problem.
 
 As this plugin computes data in-place, we don't need this.
 */
-size_t QueryBallPointPlugin::getWorkspaceSize
+size_t SignOpPlugin::getWorkspaceSize
         (const PluginTensorDesc *inputs, int32_t nbInputs, 
         const PluginTensorDesc *outputs, int32_t nbOutputs) const noexcept{
     // TODO: Figure this out
@@ -323,155 +247,59 @@ Inputs:
 Returns
     0 for success, else non-zero (which will cause engine termination).
 */
-int32_t QueryBallPointPlugin::enqueue 
+int32_t SignOpPlugin::enqueue 
         (const PluginTensorDesc *inputDesc, const PluginTensorDesc *outputDesc, 
         const void *const *inputs, void *const *outputs, 
         void *workspace, cudaStream_t stream) noexcept{
     
-    assertm((inputDesc[0].dims.nbDims==3 && inputDesc[0].dims.d[2]==3), 
-        "QueryBallPoint expects (batch_size, ndataset, 3) xyz1 shape."
-    );
-    assertm((inputDesc[1].dims.nbDims==3 && inputDesc[1].dims.d[2]==3), 
-        "QueryBallPoint expects (batch_size, npoint, 3) xyz2 shape."
-    );
-    // declare 'inputs' as pointer to const pointer to const void
-    // declare 'outputs' as as pointer to const pointer to void
-    int b = inputDesc[0].dims.d[0]; // batch size
-    int n = inputDesc[0].dims.d[1];
-    int m = inputDesc[1].dims.d[1];
-
-    // handlers for input. Should be flattened already since already in memory.
-    const float* xyz1 = static_cast<const float*>(inputs[0]);
-    const float* xyz2 = static_cast<const float*>(inputs[1]);
-
-    // handlers for output
-    int32_t* idx = static_cast<int32_t*>(outputs[0]);
-    int32_t* pts_cnt = static_cast<int32_t*>(outputs[1]);
+    // get handlers to input and output tensors
 
     // Launch inference kernel
-    queryBallPointLauncher(b, n, m, _radius, _num_samples, 
-                    xyz1, xyz2, idx, pts_cnt
-                    );
-
-    assertm( (outputDesc[0].dims.nbDims==3 && outputDesc[0].dims.d[2]==_num_samples),
-        "Output idx must have shape (batch_size, npoint, num_samples)"
-    );
-    assertm( (outputDesc[1].dims.nbDims==2) ,
-        "Output pts_cnt must have shape (batch_size, npoint)"
-    );
+    signOpLauncher();
 
     return 0;
 }
 // #################################################################################### //
 
 // #################################################################################### //
-/*                       Functions for QueryBallPointPluginCreator                      */
+/*                       Functions for SignOpPluginCreator                      */
 // #################################################################################### //
 
-QueryBallPointPluginCreator::QueryBallPointPluginCreator(){
-    // Describe QBPPlugin's required PluginField args (radius, num_samples)
-    mPluginAttributes.emplace_back(
-            PluginField("radius", nullptr, PluginFieldType::kFLOAT32, 1));
+SignOpPluginCreator::SignOpPluginCreator(){}
 
-    mPluginAttributes.emplace_back(
-            PluginField("nsample", nullptr, PluginFieldType::kINT32, 1));
-
-    // Fill PluginFieldCollection with PluginField arguments metadata
-    mFC.nbFields = mPluginAttributes.size();
-    mFC.fields = mPluginAttributes.data();
+const char* SignOpPluginCreator::getPluginName() const noexcept{
+    return SIGN_OP_PLUGIN_NAME;
 }
 
-const char* QueryBallPointPluginCreator::getPluginName() const noexcept{
-    return QUERYBALLPOINT_PLUGIN_NAME;
+const char* SignOpPluginCreator::getPluginVersion() const noexcept{
+    return SIGN_OP_PLUGIN_VERSION;
 }
 
-const char* QueryBallPointPluginCreator::getPluginVersion() const noexcept{
-    return QUERYBALLPOINT_PLUGIN_VERSION;
-}
-
-const PluginFieldCollection* QueryBallPointPluginCreator::getFieldNames() noexcept{
+const PluginFieldCollection* SignOpPluginCreator::getFieldNames() noexcept{
     return &mFC;
 }
 
-// Creates a new instance of QueryBallPointPlugin
-IPluginV2* QueryBallPointPluginCreator::createPlugin
+// Creates a new instance of SignOpPlugin
+IPluginV2* SignOpPluginCreator::createPlugin
     (const char* name, const PluginFieldCollection* fc) noexcept{
-
-    float radius_init;
-    int32_t num_samples_init;
-    const PluginField* fields = fc->fields;
-
-    // Parse fields from PluginFieldCollection
-    // printf("\nfc has %d fields\n", fc->nbFields);
-    assertm((fc->nbFields == 2), "Input PluginFiledCollection must only have 2 fields.");
-    
-    for (int i = 0; i < fc->nbFields; i++) {
-        // printf("FieldCollection field %d: name: %s, type: %d\n", i, fields[i].name, fields[i].type);
-
-        if (strcmp(fields[i].name, "radius") == 0)
-        {
-            assertm((fields[i].type == PluginFieldType::kFLOAT32), 
-                "Provided radius parameter must have datatype float32");
-            radius_init = *(static_cast<const float*>(fields[i].data));
-            // printf("Initialized radius with value %f.\n", radius_init);
-        }
-        else if (strcmp(fields[i].name, "nsample") == 0)
-        {
-            assertm((fields[i].type == PluginFieldType::kINT32), 
-                "Provided num_samples parameter must have datatype int32");
-            num_samples_init = *(static_cast<const int32_t*>(fields[i].data));
-            // printf("Initialized nSample with value %d.\n", num_samples_init);
-        }
-    }
-
-    return new QueryBallPointPlugin(name, radius_init, num_samples_init);
+    return new SignOpPlugin(name);
 }
 
-IPluginV2* QueryBallPointPluginCreator::deserializePlugin
+IPluginV2* SignOpPluginCreator::deserializePlugin
     (const char* name, const void* serialData, size_t serialLength) noexcept{
     // This object will be deleted when the network is destroyed, which will
     // call ClipPlugin::destroy()
-    return new QueryBallPointPlugin(name, serialData, serialLength);
+    return new SignOpPlugin(name, serialData, serialLength);
 }
 
-void QueryBallPointPluginCreator::setPluginNamespace
+void SignOpPluginCreator::setPluginNamespace
     (const char* pluginNamespace) noexcept{
     
     mNamespace = pluginNamespace;
 }
 
-const char* QueryBallPointPluginCreator::getPluginNamespace() const noexcept{
+const char* SignOpPluginCreator::getPluginNamespace() const noexcept{
     return mNamespace.c_str();
 }
 
 // #################################################################################### //
-
-
-// Unimplemented IPluginV2 functions, keep for reference
-/*
-void ClipPlugin::configureWithFormat(const Dims* inputs, int nbInputs, const Dims* outputs, int nbOutputs,
-    DataType type, PluginFormat format, int) noexcept
-{
-    // Validate input arguments
-    assert(nbOutputs == 1);
-    assert(type == DataType::kFLOAT);
-    assert(format == PluginFormat::kLINEAR);
-
-    // Fetch volume for future enqueue() operations
-    size_t volume = 1;
-    for (int i = 0; i < inputs->nbDims; i++)
-    {
-        volume *= inputs->d[i];
-    }
-    mInputVolume = volume;
-}
-
-bool ClipPlugin::supportsFormat(DataType type, PluginFormat format) const noexcept
-{
-    // This plugin only supports ordinary floats, and NCHW input format
-    if (type == DataType::kFLOAT && format == PluginFormat::kLINEAR)
-        return true;
-    else
-        return false;
-}
-*/

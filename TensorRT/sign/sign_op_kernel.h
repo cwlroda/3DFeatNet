@@ -16,15 +16,12 @@
  * Template by NVIDIA, developed by Tianyi
  */
 
-#ifndef GROUPING_KERNEL_H
-#define GROUPING_KERNEL_H
+#ifndef SIGN_OP_KERNEL_H
+#define SIGN_OP_KERNEL_H
 #include "NvInfer.h"
 
-void queryBallPointLauncher(int b, int n, int m, 
-        float radius, int nsample, const float *xyz1, 
-        const float *xyz2, int *idx, int *pts_cnt);
-
-void groupPointLauncher(int b, int n, int c, int m, 
-        int nsample, const float *points, const int *idx, float *out);
+// Implement SignOp for int32, float32.
+void signOpLauncher(float* in, float* out);
+void signOpLauncher(int32_t* in, int32_t* out);
 
 #endif
