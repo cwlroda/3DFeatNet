@@ -252,22 +252,24 @@ int32_t SignOpPlugin::enqueue
         const void *const *inputs, void *const *outputs, 
         void *workspace, cudaStream_t stream) noexcept{
     
-    int n = sizeof(inputs) / sizeof(float);
+    int n;
 
     // get handlers to input and output tensors and launch inference kernel
     switch (inputDesc[0].type){
-        case DataType::kFLOAT:
-            const float* in = static_cast<const float*>(inputs[0]);
-            float* out = static_cast<float*>(outputs[0]);
-            signOpLauncher(n, in, out);
-            break;
-
-        case DataType::kINT32:
+        case DataType::kINT32: {
+            n = sizeof(inputs) / sizeof(int32_t);
             const int32_t* in = static_cast<const int32_t*>(inputs[0]);
             int32_t* out = static_cast<int32_t*>(outputs[0]);
-            signOpLauncher(n, in, out);
+            signOpLauncher<int32_t>(n, in, out);
             break;
-
+        }
+        case DataType::kFLOAT: {
+            n = sizeof(inputs) / sizeof(float);
+            const float* in = static_cast<const float*>(inputs[0]);
+            float* out = static_cast<float*>(outputs[0]);
+            signOpLauncher<float>(n, in, out);
+            break;
+        }
         default:
             throw "Data Type given not supported!";
     }
