@@ -87,7 +87,7 @@ TensorRT comes with a prebuilt Docker container with TensorRT 8.x in Ubuntu 18.0
 
 To setup the Docker container, first install Docker. Clone the [TensorRT](https://github.com/NVIDIA/TensorRT) and [onnx-tensorrt](https://github.com/onnx/onnx-tensorrt) repos to a convenient location. We suggest the same parent directory as the one 3DFeatNet is in, and the sample build script below works if it is.
 ```bash
-CUDA_VER=11.4.1
+CUDA_VER=11.3.1
 ARG_IMAGENAME="tensorrt-ubuntu18.04-cuda${CUDA_VER}_3dfn"  # change this to your liking
 FN3D_LOC="$(pwd)"
 
@@ -114,21 +114,15 @@ Firstly, the custom ops need to be built for TensorRT. Luckily, the CUDA functio
 
 In the TensorRT container, navigate to the 3DFeatNet repo. Then, run the following:
 ```bash
-cd TensorRT/grouping; mkdir -p build && cd build
-cmake ..
-make
-cd ../../sign; mkdir -p build && cd build
-cmake ..
-make
-cd ../../..
+bash ./TensorRT/build_ops.sh
 ```
-This builds the grouping ops `QueryBallPoint` and `GroupPoint`, and puts their `.so` files in `3DFeatNet/TensorRT/build`. It also includes the definition for the `Sign` ONNX op which would otherwise be undefined in TensorRT.
+This builds the grouping ops `QueryBallPoint` and `GroupPoint`, and puts their `.so` files in `3DFeatNet/TensorRT/grouping/build`. It also includes the definition for the `Sign` ONNX op which would otherwise be undefined in TensorRT in `3DFeatNet/TensorRT/sign/build`.
 
 Navigate to the 3DFeatNet repo in the container workspace and run the following:
 ```bash
 trtexec --onnx=./onnx_models/model_infer.onnx \
 --plugins=./TensorRT/grouping/build/libPointNetGroupingOps.so \
---plugins=./TensorRT/grouping/sign/libSignOps.so \
+--plugins=./TensorRT/sign/build/libSignOps.so \
 --saveEngine=./TensorRT/model_infer.lib
 ```
 If successful, it registers the inference engine in `./TensorRT/model_infer.lib`.

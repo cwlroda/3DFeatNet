@@ -35,6 +35,9 @@ RUN usermod -aG sudo trtuser
 RUN echo 'trtuser:nvidia' | chpasswd
 RUN mkdir -p /workspace && chown trtuser /workspace
 
+# Allow apt-get to write to /tmp
+RUN mkdir -p /tmp && chmod 1777 /tmp
+
 # Install requried libraries
 RUN apt-get update && apt-get install -y software-properties-common
 RUN add-apt-repository ppa:ubuntu-toolchain-r/test
@@ -99,7 +102,7 @@ RUN pip3 install setuptools>=41.0.0
 COPY ./requirements.txt /tmp/requirements.txt
 RUN pip3 install -r /tmp/requirements.txt
 # Workaround to remove numpy installed with tensorflow
-RUN pip3 install --upgrade numpy
+# RUN pip3 install --upgrade numpy
 
 # Install Cmake
 RUN cd /tmp && \
