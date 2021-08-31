@@ -133,6 +133,7 @@ data/oxford
 draft.py
 3DFeatNet/* # copy stuff
 
-# model onnx among other things
+# ONNX and TensorRT savedModels
 *.onnx
 inference_savedmodel/
+*.lib

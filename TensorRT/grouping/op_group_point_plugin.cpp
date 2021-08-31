@@ -248,6 +248,15 @@ bool GroupPointPlugin::supportsFormatCombination
     // Network supports:
     // FP32 NHWC for both inputs.
     // float32 outputs.
+    /*
+    printf("Checking GroupPoint inputs and outputs:\n");
+    for(int i=0; i<nbInputs; i++){
+        printf("Input %d has type %d and format %d.\n", i, inOut[i].type, inOut[i].format);
+    }
+    for(int i=nbInputs; i<nbInputs+nbOutputs; i++){
+        printf("Output %d has type %d and format %d.\n", i-nbInputs, inOut[i].type, inOut[i].format);
+    }
+    */
 
     assertm( (0<=pos && pos<3), 
         "Position should be between 0-2 (2 inputs, 1 output)"
@@ -257,8 +266,8 @@ bool GroupPointPlugin::supportsFormatCombination
     switch (pos)
     {
     case 0:
-        return inOut[pos].type == DataType::kFLOAT &&
-            inOut[pos].format == TensorFormat::kHWC; // points: float array in NHWC
+        return inOut[pos].type == DataType::kFLOAT;
+            // && inOut[pos].format == TensorFormat::kHWC; // points: float array in NHWC
     case 1:
         return inOut[pos].type == DataType::kINT32; // idx, int32 array
     case 2:

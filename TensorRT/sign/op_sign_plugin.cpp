@@ -197,16 +197,24 @@ bool SignOpPlugin::supportsFormatCombination
         (int32_t pos, const PluginTensorDesc *inOut, 
         int32_t nbInputs, int32_t nbOutputs) noexcept{
 
-    // Network supports:
-    // FP32 NHWC for both inputs.
-    // int32 outputs.
+    // Network supports: anything so long the output is same dtype as input
+
+    /*
+    printf("Checking Sign inputs and outputs:\n");
+    for(int i=0; i<nbInputs; i++){
+        printf("Input %d has type %d and format %d.\n", i, inOut[i].type, inOut[i].format);
+    }
+    for(int i=nbInputs; i<nbInputs+nbOutputs; i++){
+        printf("Output %d has type %d and format %d.\n", i-nbInputs, inOut[i].type, inOut[i].format);
+    }
+    */
 
     assertm( (0<=pos && pos<2), 
         "Position should be between 0-1 (1 inputs, 1 outputs)"
         );
 
-    // Check if outputs are int32 
-    return inOut[0].type == inOut[1].type;
+    // Check if output is same type as input or unknown
+    return (inOut[0].type == inOut[1].type) || (int32_t)inOut[1].type==-1;
 }
 
 /*
@@ -253,6 +261,9 @@ int32_t SignOpPlugin::enqueue
         void *workspace, cudaStream_t stream) noexcept{
     
     int n;
+    assertm( (inputDesc[0].type==DataType::kINT32 || inputDesc[0].type==DataType::kFLOAT),
+        "Sign Op only supports int32 and float32 implementation!"
+    );
 
     // get handlers to input and output tensors and launch inference kernel
     switch (inputDesc[0].type){
@@ -260,18 +271,20 @@ int32_t SignOpPlugin::enqueue
             n = sizeof(inputs) / sizeof(int32_t);
             const int32_t* in = static_cast<const int32_t*>(inputs[0]);
             int32_t* out = static_cast<int32_t*>(outputs[0]);
-            signOpLauncher<int32_t>(n, in, out);
+            signOpLauncher(n, in, out);
             break;
         }
         case DataType::kFLOAT: {
             n = sizeof(inputs) / sizeof(float);
             const float* in = static_cast<const float*>(inputs[0]);
             float* out = static_cast<float*>(outputs[0]);
-            signOpLauncher<float>(n, in, out);
+            signOpLauncher(n, in, out);
             break;
         }
-        default:
-            throw "Data Type given not supported!";
+        default: {
+            // Noisily refuse to handle the other datatypes
+            printf("Invalid input data type: %d\n", (int32_t)inputDesc[0].type);
+        }
     }
     
     return 0;

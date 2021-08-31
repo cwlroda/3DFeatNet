@@ -268,7 +268,17 @@ bool QueryBallPointPlugin::supportsFormatCombination
     // Network supports:
     // FP32 NHWC for both inputs.
     // int32 outputs.
-
+    
+    /*
+    printf("Checking QueryBallPoint inputs and outputs:\n");
+    for(int i=0; i<nbInputs; i++){
+        printf("Input %d has type %d and format %d.\n", i, inOut[i].type, inOut[i].format);
+    }
+    for(int i=nbInputs; i<nbInputs+nbOutputs; i++){
+        printf("Output %d has type %d and format %d.\n", i-nbInputs, inOut[i].type, inOut[i].format);
+    }
+    */
+    
     assertm( (0<=pos && pos<4), 
         "Position should be between 0-3 (2 inputs, 2 outputs)"
         );
@@ -277,8 +287,8 @@ bool QueryBallPointPlugin::supportsFormatCombination
     if (pos >= 2){
         return inOut[pos].type == DataType::kINT32;         // outputs int32
     } else {
-        return inOut[pos].type == DataType::kFLOAT &&       // float32
-            inOut[pos].format == TensorFormat::kHWC;     // NHWC
+        return inOut[pos].type == DataType::kFLOAT;         // inptus float32
+            // && inOut[pos].format == TensorFormat::kHWC;     // NHWC
     }
 
     return false;

@@ -20,10 +20,10 @@
 #define SIGN_OP_KERNEL_H
 #include "NvInfer.h"
 
-template<typename T>
-void signOpLauncher(int n, const T* in, T* out);
+// template<typename T>
+// void signOpLauncher(int n, const T* in, T* out);
 
-// void signOpLauncher(int n, const float* in, float* out);
-// void signOpLauncher(int n, const int32_t* in, int32_t* out);
+void signOpLauncher(int n, const float* in, float* out);
+void signOpLauncher(int n, const int32_t* in, int32_t* out);
 
 #endif
