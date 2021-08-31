@@ -35,35 +35,35 @@ RUN usermod -aG sudo trtuser
 RUN echo 'trtuser:nvidia' | chpasswd
 RUN mkdir -p /workspace && chown trtuser /workspace
 
-# Allow apt-get to write to /tmp
+# Allow apt to write to /tmp
 RUN mkdir -p /tmp && chmod 1777 /tmp
 
 # Install requried libraries
-RUN apt-get update && apt-get install -y software-properties-common
+RUN apt update && apt install -y software-properties-common
 RUN add-apt-repository ppa:ubuntu-toolchain-r/test
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt update && apt install -y --no-install-recommends \
     libcurl4-openssl-dev wget zlib1g-dev git pkg-config sudo ssh libssl-dev \
     pbzip2 pv bzip2 unzip devscripts lintian fakeroot dh-make build-essential \
     nano tree libprotobuf-dev protobuf-compiler 
 
 # installs miniconda
-RUN apt-get update --fix-missing && apt-get install -y ca-certificates \
+RUN apt update --fix-missing && apt install -y ca-certificates \
     libglib2.0-0 libxext6 libsm6 libxrender1 \
     mercurial subversion
 
 RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-4.7.12-Linux-x86_64.sh -O ~/miniconda.sh && \
     /bin/bash ~/miniconda.sh -b -p /opt/conda && \
-    rm ~/miniconda.sh && \
-    ln -s /opt/conda/etc/profile.d/conda.sh /etc/profile.d/conda.sh && \
-    echo ". /opt/conda/etc/profile.d/conda.sh" >> ~/.bashrc && \
-    echo "conda activate base" >> ~/.bashrc
+    rm ~/miniconda.sh
+RUN ln -s /opt/conda/etc/profile.d/conda.sh /etc/profile.d/conda.sh
+RUN echo ". /opt/conda/etc/profile.d/conda.sh" >> /home/trtuser/.bashrc && \
+    echo "conda activate base" >> /home/trtuser/.bashrc
 
-RUN apt-get install -y curl grep sed dpkg && \
+RUN apt install -y curl grep sed dpkg && \
     TINI_VERSION=`curl https://github.com/krallin/tini/releases/latest | grep -o "/v.*\"" | sed 's:^..\(.*\).$:\1:'` && \
     curl -L "https://github.com/krallin/tini/releases/download/v${TINI_VERSION}/tini_${TINI_VERSION}.deb" > tini.deb && \
     dpkg -i tini.deb && \
     rm tini.deb && \
-    apt-get clean
+    apt clean
 
 # Add conda to path
 ENV PATH=/opt/conda/bin:$PATH
@@ -73,24 +73,15 @@ RUN conda update -n base -c defaults conda
 
 # end install miniconda
 
-# Install python3
-# RUN apt-get install -y --no-install-recommends \
-#       python3 \
-#       python3-pip \
-#       python3-dev \
-#       python3-wheel &&\
-#     cd /usr/local/bin &&\
-#     ln -s /usr/bin/python3 python &&\
-#     ln -s /usr/bin/pip3 pip;    
-
 # Install TensorRT
 RUN v="${TRT_VERSION%.*}-1+cuda${CUDA_VERSION%.*}" &&\
     apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/7fa2af80.pub &&\
-    apt-get update &&\
-    sudo apt-get install libnvinfer8=${v} libnvonnxparsers8=${v} libnvparsers8=${v} libnvinfer-plugin8=${v} \
+    apt update &&\
+    sudo apt install libnvinfer8=${v} libnvonnxparsers8=${v} libnvparsers8=${v} libnvinfer-plugin8=${v} \
         libnvinfer-dev=${v} libnvonnxparsers-dev=${v} libnvparsers-dev=${v} libnvinfer-plugin-dev=${v} \
         python3-libnvinfer=${v}
 
+RUN conda init bash
 RUN conda create --name tf2 python=3.7
 
 # Make RUN commands use the new environment:
@@ -126,8 +117,9 @@ ENV PATH="/usr/lib/bin/:$PATH"
 ENV LD_LIBRARY_PATH="/opt/conda/envs/tf2/lib/python3.7/site-packages/tensorflow/:/usr/local/cuda-11.3/lib64:$LD_LIBRARY_PATH"
 
 # Enable the conda env as well as colour terminal
-RUN sed -i "s|activate base|activate tf2|g" ~/.bashrc
-RUN sed -i "s|#force_color|force_color|g" ~/.bashrc
+RUN echo "Recovering things at the end"
+RUN sed -i "s|activate base|activate tf2|g" /home/trtuser/.bashrc
+RUN sed -i "s|#force_color|force_color|g" /home/trtuser/.bashrc
 
 USER trtuser
 RUN ["/bin/bash"]
