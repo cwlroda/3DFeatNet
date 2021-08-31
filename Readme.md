@@ -131,6 +131,6 @@ trtexec --shapes=input:1x1x16384x6 --loadEngine=./TensorRT/model_infer.lib \
 --plugins=./TensorRT/ops/grouping/build/libPointNetGroupingOps.so \
 --plugins=./TensorRT/ops/sign/build/libSignOps.so
 ```
-It should output something like `PASSED TensorRT.trtexec [TensorRT v8001]`.
+It should output something like `&&&& PASSED TensorRT.trtexec [TensorRT v8001]...`.
 
 ## Running inference in TensorRT
