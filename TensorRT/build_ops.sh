@@ -4,7 +4,7 @@
 # This is meant to be called from the 3DFeatNet base directory.
 set -e
 
-cd TensorRT/grouping
+cd TensorRT/ops/grouping
 mkdir -p build && cd build
 echo "################## Building for Grouping Ops ##################"
 cmake ..

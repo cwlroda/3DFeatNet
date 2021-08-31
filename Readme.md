@@ -121,33 +121,16 @@ This builds the grouping ops `QueryBallPoint` and `GroupPoint`, and puts their `
 Navigate to the 3DFeatNet repo in the container workspace and run the following:
 ```bash
 trtexec --onnx=./onnx_models/model_infer.onnx \
---plugins=./TensorRT/grouping/build/libPointNetGroupingOps.so \
---plugins=./TensorRT/sign/build/libSignOps.so \
+--plugins=./TensorRT/ops/grouping/build/libPointNetGroupingOps.so \
+--plugins=./TensorRT/ops/sign/build/libSignOps.so \
 --saveEngine=./TensorRT/model_infer.lib
 ```
-If successful, it registers the inference engine in `./TensorRT/model_infer.lib`.
+If successful, it registers the inference engine in `./TensorRT/model_infer.lib`. You can validate the model building by running it with random-valued data:
+```bash
+trtexec --shapes=input:1x1x16384x6 --loadEngine=./TensorRT/model_infer.lib \
+--plugins=./TensorRT/ops/grouping/build/libPointNetGroupingOps.so \
+--plugins=./TensorRT/ops/sign/build/libSignOps.so
+```
+It should output something like `PASSED TensorRT.trtexec [TensorRT v8001]`.
 
 ## Running inference in TensorRT
-
-
-## Running inference in ONNX
-
-# Anything below this line is experimental
-*****
-## Conversion to ONNX and TensorRT
-To convert the trained model for inference into ONNX format, first wait for training to complete. Subsequently, run the `inference_example.sh` script, which will call sample data on the model so that a `SavedModel` can be built. Subsequently, it will save the TensorFlow `SavedModel` to a directory (by defaut, `./ckpt/infer_model`).
-
-Subsequently, call ```python -m tf2onnx.convert --saved-model ./ckpt/infer_model --output model_infer.onnx --load_op_libraries ./tf_ops/grouping/tf_grouping_so.so,./tf_ops/sampling/tf_sampling_so.so```. The last flag is important, as it registers the custom ops in ONNX.
-The model can then be verified visually calling `netron model_infer.onnx`.
-
-Attempted to use the command 
-```bash
-python -m tf2onnx.convert --saved-model inference_savedmodel/ --output model_train.onnx --load_op_libraries ./tf_ops/grouping/tf_grouping_so.so,./tf_ops/sampling/tf_sampling_so.so --verbose --rename-inputs pointcloud --rename-outputs sliced_pointcloud,features,attention
-```
-However, the custom ops are not correctly registered in ONNX, meaning that the ONNX model is unlikely to work out. This has to be resolved before further conversion occurs.
-
-For TensorRT conversion, the docker container was installed. Subsequently, call `sudo ./docker/launch.sh --tag tensorrt-ubuntu18.04-cuda11.3 --gpus all` from `/media/intern/SSD1/TensorRT` to start the Docker container. 
-
-**TODO:** 
-1. A symlink to the 3DFeatNet Tf2 repo needs to be created beforehand to allow the Docker Container to access the created ONNX model before things work!
-2. The `nvidia-docker-toolkit` needs to be setup on the workstation.
