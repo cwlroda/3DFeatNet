@@ -44,9 +44,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     nano tree libprotobuf-dev protobuf-compiler 
 
 # installs miniconda
-RUN apt-get update --fix-missing && apt-get install -y wget bzip2 ca-certificates \
+RUN apt-get update --fix-missing && apt-get install -y ca-certificates \
     libglib2.0-0 libxext6 libsm6 libxrender1 \
-    git mercurial subversion
+    mercurial subversion
 
 RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-4.7.12-Linux-x86_64.sh -O ~/miniconda.sh && \
     /bin/bash ~/miniconda.sh -b -p /opt/conda && \
@@ -96,7 +96,7 @@ SHELL ["conda", "run", "-n", "tf2", "/bin/bash", "-c"]
 # Install PyPI packages from requirements.txt
 RUN pip3 install --upgrade pip
 RUN pip3 install setuptools>=41.0.0
-COPY ../requirements.txt /tmp/requirements.txt
+COPY ./requirements.txt /tmp/requirements.txt
 RUN pip3 install -r /tmp/requirements.txt
 # Workaround to remove numpy installed with tensorflow
 RUN pip3 install --upgrade numpy

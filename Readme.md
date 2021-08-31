@@ -87,16 +87,17 @@ TensorRT comes with a prebuilt Docker container with TensorRT 8.x in Ubuntu 18.0
 
 To setup the Docker container, first install Docker. Clone the [TensorRT](https://github.com/NVIDIA/TensorRT) and [onnx-tensorrt](https://github.com/onnx/onnx-tensorrt) repos to a convenient location. We suggest the same parent directory as the one 3DFeatNet is in, and the sample build script below works if it is.
 ```bash
-ARG_IMAGENAME="tensorrt-ubuntu18.04-cuda11.3_3dfn"  # change this to your liking
-3DFN_LOC = $(pwd)
+CUDA_VER=11.4.1
+ARG_IMAGENAME="tensorrt-ubuntu18.04-cuda${CUDA_VER}_3dfn"  # change this to your liking
+FN3D_LOC="$(pwd)"
 
-sudo docker build -f ${3DFN_LOC}/docker/ubuntu-18.04_modded.Dockerfile \
---build-arg CUDA_VERSION=11.3 --build-arg uid=$(id -u) \
---build-arg gid=$(id -g) --tag=$ARG_IMAGENAME
+sudo docker build -f "${FN3D_LOC}/docker/ubuntu-18.04_modded.Dockerfile" \
+--build-arg CUDA_VERSION="${CUDA_VER}" --build-arg uid=$(id -u) \
+--build-arg gid=$(id -g) --tag=$ARG_IMAGENAME .
 ```
 To run the Docker image, run
 ```bash
-sudo docker run -it -v "${3DFN_LOC}/..":"/workspace" \  # This ensures that the TensorRT and onnx-trt build folders can be found.
+sudo docker run -it -v "${FN3D_LOC}/..":"/workspace" \  # This ensures that the TensorRT and onnx-trt build folders can be found.
 -p 80 -p 6006:6008 \                                    # binds ports for HTTP and TensorBoard.
 --gpus all ${ARG_IMAGENAME}:latest
 ```
@@ -121,7 +122,7 @@ cmake ..
 make
 cd ../../..
 ```
-This builds the grouping ops `QueryBallPoint` and `GroupPoint`, and puts their `.so` files in `3DFeatNet/TensorRT/build`.
+This builds the grouping ops `QueryBallPoint` and `GroupPoint`, and puts their `.so` files in `3DFeatNet/TensorRT/build`. It also includes the definition for the `Sign` ONNX op which would otherwise be undefined in TensorRT.
 
 Navigate to the 3DFeatNet repo in the container workspace and run the following:
 ```bash

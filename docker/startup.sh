@@ -9,9 +9,6 @@ cmake .. -DTRT_LIB_DIR=$TRT_LIBPATH -DTRT_OUT_DIR=`pwd`/out
 make -j$(nproc)
 make install
 
-# TODO remove this if built from docker image
-apt -y install libprotobuf-dev protobuf-compiler
-
 #install onnx2trt
 cd /workspace/onnx-tensorrt
 mkdir -p build && cd build
