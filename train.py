@@ -136,7 +136,8 @@ def train(gpu_list):
 
     # Need to put in a dummy input to initialize the model.
     rand_input = tf.concat([tf.random.normal([BATCH_SIZE, args.num_points, args.data_dim])]*3, axis=0)
-    model(rand_input, training=True)
+    inputs = {'pointcloud': rand_input, 'bypass': False, 'keypoints': 0.0}
+    model(inputs, True)
 
     # Extract initialised weights out of the model, for restoration later.
     raw_weights = {}
@@ -237,7 +238,8 @@ def train(gpu_list):
                     tape_train.watch([model.trainable_weights])
 
                     # Run forward pass
-                    _1, features, att, end_points = model(point_cloud, training=True)
+                    inputs = {'pointcloud': point_cloud, 'bypass': False, 'keypoints': 0.0}
+                    _1, features, att, end_points = model(inputs, training=True)
 
                     loss_val = loss_fn(att, features)
 
@@ -332,10 +334,10 @@ def validate(model, val_folder, val_groundtruths, data_dim):
 
         clouds1 = np.concatenate(clouds1, axis=0)[None, :, :]
         clouds2 = np.concatenate(clouds2, axis=0)[None, :, :]
-
-        xyz1, features1, _, _ = model(inputs=clouds1, training=False, bypass_detect=offsets)
-
-        xyz2, features2, _, _ = model(inputs=clouds2, training=False, bypass_detect=offsets)
+        inputs = {'pointcloud': clouds1, 'bypass': True, 'keypoints': offsets}
+        xyz1, features1, _, _ = model(inputs, training=False)
+        inputs = {'pointcloud': clouds2, 'bypass': True, 'keypoints': offsets}
+        xyz2, features2, _, _ = model(inputs, training=False)
 
         d = np.sqrt(np.sum(np.square(np.squeeze(features1 - features2)), axis=1))
         d = d[:num_clusters]

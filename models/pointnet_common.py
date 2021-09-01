@@ -65,7 +65,7 @@ def query_and_group_points(xyz, points, new_xyz, nsample, radius, knn=False,
 
 
 def sample_and_group(npoint, radius, nsample, xyz, points, tnet_spec=None, knn=False, use_xyz=True,
-                     keypoints=None, orientations=None, normalize_radius=False):
+                     keypoints=None, orientations=None, rotate_orientation=True, normalize_radius=False):
     '''
     Input:
         npoint: int32
@@ -109,7 +109,7 @@ def sample_and_group(npoint, radius, nsample, xyz, points, tnet_spec=None, knn=F
     end_points['grouped_xyz_before'] = grouped_xyz
 
     # 2D-rotate via orientations if necessary
-    if orientations is not None:
+    if orientations is not None and rotate_orientation is True:
         cosval = tf.cos(orientations)
         sinval = tf.sin(orientations)
         one = tf.ones_like(cosval)

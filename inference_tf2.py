@@ -59,13 +59,15 @@ parser.add_argument('--checkpoint', type=str, default=CKPT_PATH,
                     help='Checkpoint to restore from (optional)')
 parser.add_argument('--output_dir', type=str,
                     help='Directory to save results to')
+parser.add_argument('--model_savepath', type=str, default="inference_savedmodel",
+                        help="Directory to save model to")
 args = parser.parse_args()
 
 # Create Logging
 logging.config.fileConfig('logging.conf')
 logger = logging.getLogger(__name__)
 coloredlogs.install(level='DEBUG', logger=logger)
-model_savepath = os.path.join(os.getcwd(), "inference_savedmodel")
+model_savepath = os.path.join(os.getcwd(), args.model_savepath)
 
 def compute_descriptors():
 
@@ -100,10 +102,12 @@ def compute_descriptors():
         logger.info('Restored weights from {}.'.format(model_find))
     else:
         logger.info('Unable to find a latest checkpoint in {}'.format(args.checkpoint))
+        exit(1)
     
     num_processed = 0
+    inference_iterations = 1 # len(binFiles)
 
-    for iBin in range(0, len(binFiles)):
+    for iBin in range(0, inference_iterations):
         binFile = binFiles[iBin]
         fname_no_ext = binFile[:-4]
         pointcloud = DataGenerator.load_point_cloud(os.path.join(args.data_dir, binFile), num_cols=data_dim)
@@ -131,7 +135,9 @@ def compute_descriptors():
                 xyz_subset = pointclouds[:, startPt:endPt, :3]
 
                 # Compute attention over all points
-                xyz_cur, keypoints_cur, attention_cur, end_points_cur = model(pointclouds, False)
+                inputs = {'pointcloud': pointclouds, 'bypass': False, 'keypoints': 0.0}
+                xyz_cur, keypoints_cur, attention_cur, end_points_cur = \
+                    model(inputs, False)
 
                 xyz.append(xyz_cur)
                 attention.append(attention_cur)
@@ -169,7 +175,8 @@ def compute_descriptors():
             xyz_nms = np.stack(xyz_nms, axis=0)
 
         # Compute features
-        xyz, features, attention, end_points = model(pointclouds, False)
+        inputs = {'pointcloud': pointclouds, 'bypass': True, 'keypoints': xyz_nms}
+        xyz, features, attention, end_points = model(inputs, None)
         # xyz, features = \
         #     sess.run([xyz_op, features_op],
         #                 feed_dict={cloud_pl: pointclouds, is_training: False, end_points['keypoints']: xyz_nms})
