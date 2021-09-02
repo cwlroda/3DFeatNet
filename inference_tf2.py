@@ -105,7 +105,7 @@ def compute_descriptors():
         exit(1)
     
     num_processed = 0
-    inference_iterations = 1 # len(binFiles)
+    inference_iterations = len(binFiles)
 
     for iBin in range(0, inference_iterations):
         binFile = binFiles[iBin]
@@ -134,8 +134,10 @@ def compute_descriptors():
                 endPt = min(pointcloud.shape[0], startPt + MAX_POINTS)
                 xyz_subset = pointclouds[:, startPt:endPt, :3]
 
+                logger.debug("#### Calling model with bypass=False")
                 # Compute attention over all points
-                inputs = {'pointcloud': pointclouds, 'bypass': False, 'keypoints': 0.0}
+                inputs = {'pointcloud': pointclouds, 'bypass': False, 'keypoints': 
+                    tf.zeros(shape=[pointclouds.shape[0], args.max_keypoints, 3])}
                 xyz_cur, keypoints_cur, attention_cur, end_points_cur = \
                     model(inputs, False)
 
@@ -144,6 +146,8 @@ def compute_descriptors():
 
             xyz = np.concatenate(xyz, axis=1)
             attention = np.concatenate(attention, axis=1)
+            logger.debug("keypoint shape: {}".format(xyz.shape))
+            logger.debug("attention shape: {}".format(attention.shape))
 
             # # Uncomment to save out attention to file
             # with open(os.path.join(args.output_dir, '{}_attention.bin'.format(fname_no_ext)), 'wb') as f:
@@ -175,8 +179,15 @@ def compute_descriptors():
             xyz_nms = np.stack(xyz_nms, axis=0)
 
         # Compute features
+        logger.debug("#### Calling model with bypass=True")
+        logger.debug("XYZ_nms shape: {}".format(xyz_nms.shape))
         inputs = {'pointcloud': pointclouds, 'bypass': True, 'keypoints': xyz_nms}
+
         xyz, features, attention, end_points = model(inputs, None)
+
+        logger.debug("Bypass keypoint shape: {}".format(xyz.shape))
+        logger.debug("Bypass features shape: {}".format(features.shape))
+        logger.debug("Bypass attention shape: {}".format(attention.shape))
         # xyz, features = \
         #     sess.run([xyz_op, features_op],
         #                 feed_dict={cloud_pl: pointclouds, is_training: False, end_points['keypoints']: xyz_nms})
@@ -187,8 +198,8 @@ def compute_descriptors():
                                             axis=1)
             xyz_features.tofile(f)
 
-        if num_processed == 0:
-            model.summary(line_length=90, print_fn=logger.info)
+        # if num_processed == 0:
+        #     model.summary(line_length=90, print_fn=logger.info)
             
         num_processed += 1
         logger.info('Processed %i / %i images', num_processed, len(binFiles))
@@ -205,6 +216,7 @@ def compute_descriptors():
         # logger.info("Saved model representation/graph to TensorBoard.")
         # assert 0
 
+    logger.info("Saving inference model...")
     model.save(model_savepath)
     logger.info("Saved inference model in {}".format(model_savepath))   # save model after everything is done
 
@@ -238,13 +250,15 @@ def nms(xyz, attention):
         is_max_attention = sorted(is_max_attention, reverse=True)
         max_indices = [m[1] for m in is_max_attention]
 
+        logger.debug("max_indices length: {}".format(len(max_indices)))
+
         if len(max_indices) >= args.max_keypoints:
             max_indices = max_indices[:args.max_keypoints]
             num_keypoints[i] = len(max_indices)
         else:
             num_keypoints[i] = len(max_indices)  # Retrain original number of points
             max_indices = np.pad(max_indices, (0, args.max_keypoints - len(max_indices)), 'constant',
-                                 constant_values=max_indices[0])
+                                constant_values=max_indices[0])
 
         xyz_nms[i, :, :] = xyz[i, max_indices, :]
         attention_nms[i, :] = attention[i, max_indices]
