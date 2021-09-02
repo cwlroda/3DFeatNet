@@ -80,13 +80,13 @@ class Conv2D_BN(tf.keras.layers.Layer):
         # self.output_shape = self.conv.output_shape
 
         if self.bn is not None:
-            bn_out = self.bn(conv_out, training=training)
+            conv_out = self.bn(conv_out, training=training)
             # self.output_shape = self.bn.output_shape
         if self.activ is not None:
-            bn_out = self.activ(bn_out, training=training)
+            conv_out = self.activ(conv_out, training=training)
             # self.output_shape = self.activ.output_shape
         
-        return bn_out
+        return conv_out
 
 def _variable_on_cpu(name, shape, initializer, use_fp16=False):
     """Helper to create a Variable stored on CPU memory.
