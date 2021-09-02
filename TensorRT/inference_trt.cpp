@@ -46,6 +46,8 @@ using sample::gLogInfo;
 std::vector<std::string> INPUT_FILES;
 std::string OUTPUT_DIR = "./TensorRT/infer_out";
 std::string MODEL_PATH = "./TensorRT/model_infer.lib";
+const int DIMS = 6;
+int MAX_KEYPOINTS = 1024;
 
 int main(int argc, char** argv)
 {   
@@ -86,25 +88,31 @@ int main(int argc, char** argv)
 
     gLogInfo << "Constructing Feat3dNet Inference model at path "
         << MODEL_PATH << std::endl;
-    Feat3dNetInference sample(MODEL_PATH);
+    Feat3dNetInference model(MODEL_PATH);
 
     // Perform inference for each of the files
     for( auto input_file : INPUT_FILES) {
-        // Load point cloud
+        // Load point cloud as array.
 
-        // obtain dimensions for point cloud
-        int32_t width{1282};
-        int32_t height{1026};
+        // TODO use a better library than plain float, can try using Eigen?
+        std::vector<float> pc;
+        ReadVariableFromBin(pc, input_file, DIMS);
 
-        // Randomise points (if necessary)
+        // reads pointcloud from array
+        int32_t numPoints = pc.size()/DIMS;
+        Eigen::TensorMap<pointcloud_t> pointClouds(&pc[0], 1, numPoints, DIMS);
 
-        // Downsample points (if necessary)
-
-        // Find shape of point clouds
-
+        // ? Randomise points (if necessary)
+        // ? Downsample points (if necessary)
+        
         // ! Only if RAM allows for it. If not, have to process in batches.
-            // Compute attention in batches due to limited memory
-            // Run inference here
+        // Compute attention in batches due to limited memory
+        // Run inference here
+        infer_output out;
+        if (!model.infer(pointClouds, numPoints, DIMS, out)){
+            gLogError << "Error in running inference." << std::endl;
+            exit(1);
+        }
 
         // nms to select keypoints based on attention
 
@@ -114,14 +122,11 @@ int main(int argc, char** argv)
         // Save the output
     }
 
-
-    // SampleSegmentation sample("fcn-resnet101.engine");
-
-    gLogInfo << "Running TensorRT inference for FCN-ResNet101" << std::endl;
-    if (!sample.infer("input.ppm", width, height, "output.ppm"))
-    {
-        return -1;
-    }
+    gLogInfo << "Running TensorRT inference for 3DFeatNet" << std::endl;
+    // if (!sample.infer("input.ppm", width, height, "output.ppm"))
+    // {
+    //     return -1;
+    // }
 
     return 0;
 }
