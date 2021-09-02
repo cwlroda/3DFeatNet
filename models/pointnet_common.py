@@ -27,8 +27,10 @@ def sample_points(xyz, npoint):
     return new_xyz
 
 
+@tf.function
 def query_and_group_points(xyz, points, new_xyz, nsample, radius, knn=False,
-                           use_xyz=True, normalize_radius=True, orientations=None):
+                           use_xyz=True, use_points=False, use_orientations=False,
+                           normalize_radius=True, orientations=None):
 
     if knn:
         _, idx = knn_point(nsample, xyz, new_xyz)
@@ -44,16 +46,16 @@ def query_and_group_points(xyz, points, new_xyz, nsample, radius, knn=False,
     if normalize_radius:
         grouped_xyz /= radius  # Scale normalization
     # 2D-rotate via orientations if necessary
-    if orientations is not None:
+    if use_orientations == True:
         cosval = tf.expand_dims(tf.cos(orientations), axis=2)
         sinval = tf.expand_dims(tf.sin(orientations), axis=2)
         grouped_xyz = tf.stack([cosval * grouped_xyz[:, :, :, 0] + sinval * grouped_xyz[:, :, :, 1],
                                 -sinval * grouped_xyz[:, :, :, 0] + cosval * grouped_xyz[:, :, :, 1],
                                 grouped_xyz[:, :, :, 2]], axis=3)
 
-    if points is not None:
+    if use_points == True:
         grouped_points = group_point(points, idx)  # (batch_size, npoint, nsample, channel)
-        if use_xyz:
+        if use_xyz == True:
 
             new_points = tf.concat([grouped_xyz, grouped_points], axis=-1)  # (batch_size, npoint, nample, 3+channel)
         else:
@@ -63,9 +65,11 @@ def query_and_group_points(xyz, points, new_xyz, nsample, radius, knn=False,
 
     return new_points, idx
 
-
-def sample_and_group(npoint, radius, nsample, xyz, points, tnet_spec=None, knn=False, use_xyz=True,
-                     keypoints=None, orientations=None, rotate_orientation=True, normalize_radius=False):
+@tf.function
+def sample_and_group(npoint, radius, nsample, xyz, points, tnet_spec=None, knn=False, 
+                    use_xyz=True, use_keypoints=True, use_tnet=False, use_points=False,
+                    orientations=None, keypoints=None, 
+                    rotate_orientation=False, normalize_radius=False):
     '''
     Input:
         npoint: int32
@@ -88,12 +92,12 @@ def sample_and_group(npoint, radius, nsample, xyz, points, tnet_spec=None, knn=F
 
     end_points = {}
 
-    if keypoints is not None:
+    if use_keypoints == True:
         new_xyz = keypoints
     else:
         new_xyz = gather_point(xyz, farthest_point_sample(npoint, xyz))  # (batch_size, npoint, 3)
 
-    if knn:
+    if knn == True:
         _, idx = knn_point(nsample, xyz, new_xyz)
         pts_cnt = nsample  # Hack. By right should make sure number of input points < nsample
     else:
@@ -103,13 +107,14 @@ def sample_and_group(npoint, radius, nsample, xyz, points, tnet_spec=None, knn=F
 
     grouped_xyz = group_point(xyz, idx)  # (batch_size, npoint, nsample, 3)
     grouped_xyz = grouped_xyz - tf.tile(tf.expand_dims(new_xyz, 2), [1, 1, nsample, 1])  # translation normalization
-    if normalize_radius:
+    if normalize_radius == True:
         grouped_xyz /= radius
+    # print(">>> grouped_xyz shape:", grouped_xyz.shape)
 
     end_points['grouped_xyz_before'] = grouped_xyz
 
     # 2D-rotate via orientations if necessary
-    if orientations is not None and rotate_orientation is True:
+    if rotate_orientation == True:
         cosval = tf.cos(orientations)
         sinval = tf.sin(orientations)
         one = tf.ones_like(cosval)
@@ -117,13 +122,18 @@ def sample_and_group(npoint, radius, nsample, xyz, points, tnet_spec=None, knn=F
         R = tf.stack([(cosval, sinval, zero), (-sinval, cosval, zero), (zero, zero, one)], axis=0)
         R = tf.transpose(R, perm=[2,3,0,1])
         grouped_xyz = tf.matmul(grouped_xyz, R)
+        # print(">>> grouped_xyz shape:", grouped_xyz.shape)
+        # print(">>> R's shape:", R.shape)
         end_points['rotation'] = R
+    else:
+        end_points['rotation'] = 0.0
 
-    if tnet_spec is not None:
-        grouped_xyz = tnet(grouped_xyz, tnet_spec)
-    if points is not None:
+    if use_tnet == True:
+        grouped_xyz = tnet(grouped_xyz, tnet_spec) # This branch should not occur in 3DFeatNet
+    if use_points == True:
+        # This branch should not appear in 3DFeatNet
         grouped_points = group_point(points, idx)  # (batch_size, npoint, nsample, channel)
-        if use_xyz:
+        if use_xyz == True:
             new_points = tf.concat([grouped_xyz, grouped_points], axis=-1)  # (batch_size, npoint, nample, 3+channel)
         else:
             new_points = grouped_points

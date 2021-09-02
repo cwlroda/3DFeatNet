@@ -1,3 +1,7 @@
+from inspect import signature
+from os import EX_OSFILE
+
+from tensorflow.python.keras.backend import dtype
 from config import BATCH_SIZE
 import logging
 import tensorflow as tf
@@ -44,8 +48,8 @@ class Feat3dNet(tf.keras.Model):
         self._num_clusters = param['num_clusters']
         self._radius = param['BaseScale']
         self._num_samples = param['num_samples']
-        self._NoRegress = param['NoRegress']
-        self._Attention = param['Attention']
+        self._NoRegress = tf.constant(param['NoRegress'], dtype=bool, name="no_regress")
+        self._Attention = tf.constant(param['Attention'], dtype=bool, name="use_attention")
 
         final_relu = False   # Required parameter for constructing ext_layers
 
@@ -98,108 +102,154 @@ class Feat3dNet(tf.keras.Model):
                             activation='relu' if (final_relu or i<len(mlp3) - 1) else None)
                 )
 
-    @tf.function
+    signature_dict = {
+        'pointcloud': tf.TensorSpec([None, None, 6], dtype=tf.float32, name='pointcloud'), 
+        'bypass': tf.TensorSpec([], dtype=tf.bool, name="bypass"), 
+        'keypoints' : tf.TensorSpec([None, None, 3], dtype=tf.float32, name='keypoints')
+    }
+    @tf.function(input_signature=[signature_dict, tf.TensorSpec([], dtype=tf.bool)])
     def call(self, inputs, training=False):
         '''
-        Forward pass of network.
+        ### Forward pass of network.
 
-        Inputs:
-            inputs(tf.Tensor): Input point cloud of dimension (batch_size, ndataset, 3)
-            training(bool): indicates training or inference on layers called.
-            bypass_detect(tf.Tensor): Defaults to None. If not, it will be substituted into
-                the result of the "keypoints" from the detection section, effectively bypassing
-                it. This is used in the validation function for training.
-        Outputs:
-            keypoints
-            features
-            attention
-            end_points
+        #### Inputs:
+        - inputs (dict) : '`feed_dict`'-eque input containing
+            - "pointcloud" (tf.Tensor): Input point cloud of dimension 
+                (batch_size, ndataset, 3)
+            - "bypass_detect" (bool): If the Feature Detector should be bypassed. 
+                If True,the value of keypoint_subst is substituted into the 
+                `new_xyz` variable after the Detector.
+            - "keypoints" (tf.Tensor): Value to be substituted into `new_xyz` to bypass
+                the Detctor calculation.
+
+        - training(bool): indicates training or inference on layers called.
+
+        #### Outputs:
+        - keypoints
+        - features
+        - attention
+        - end_points
         '''
-        inputs = inputs['pointcloud']
-        keypoint_subst = inputs['keypoints']
+        pointcloud = inputs['pointcloud']
         bypass_detect = inputs['bypass']
+        keypoint_subst = inputs['keypoints']
+
+        print("Tracing the function with input training=", training,"bypass_detect=", bypass_detect)
 
         if self.train_or_infer:
-            self.end_points['input_pointclouds'] = inputs
+            self.end_points['input_pointclouds'] = pointcloud
 
-        l0_xyz = inputs[:,:,:3]
-        # self.logger.info(">>> Shape of input point cloud: ", l0_xyz.shape)
+        l0_xyz = pointcloud[:,:,:3]
         l0_points = None    # Normal information not used in 3DFeat-Net
+
+        # self.logger.debug("l0_xyz shape: {}".format(l0_xyz.shape))
+        # self.logger.debug("keypoints shape: {}".format(keypoint_subst.shape))
+
+        ### Feature Detection Layer
+        num_clouds = tf.shape(pointcloud)[0]
+        num_points = tf.shape(pointcloud)[1]
+
+        # print("#### Bypass_detect: {}".format(bypass_detect))
 
         # Compute Sampling and Grouping Ops
         new_xyz = sample_points(l0_xyz, self._num_clusters)
         new_points, idx = query_and_group_points(l0_xyz, l0_points, new_xyz, self._num_samples, 
-                            self._radius, knn=False, use_xyz=True, normalize_radius=True, 
-                            orientations=None)
-
+                            self._radius, 
+                            knn=False, use_xyz=False, use_orientations=False, use_points=False, 
+                            normalize_radius=True, orientations=None)
         # Compute Conv2d_BN --> MaxPoolAxis --> Conv2d_BN
         for layer in self.det_layers:
+            # self.logger.debug("Layer: {}".format(layer.name))
+            # self.logger.debug("new_points has shape: {}".format(new_points.shape))
             new_points = layer(new_points, training)
 
         # Compute Attention
         attention = self.Attention(new_points)
-        attention = tf.squeeze(attention, axis=[2,3])
+        attention = tf.squeeze(attention, axis=[2,3], name="attention_squeeze")
+        # self.logger.debug("attention has shape: {}".format(attention.shape))
 
         # Compute Orientation
         orientation_xy = self.Orientation(new_points)
-        orientation_xy = tf.squeeze(orientation_xy, axis=2)
-        orientation_xy = tf.nn.l2_normalize(orientation_xy, axis=2, epsilon=1e-8)
-        orientation = tf.atan2(orientation_xy[:, :, 1], orientation_xy[:, :, 0])
+        orientation_xy = tf.squeeze(orientation_xy, axis=2, 
+            name="orientation_squeeze")
+        orientation_xy = tf.nn.l2_normalize(orientation_xy, axis=2, epsilon=1e-8, 
+            name="orientation_l2_norm")
+        orientation = tf.atan2(orientation_xy[:, :, 1], orientation_xy[:, :, 0], 
+            name="orientation_atan2")
+        # self.logger.debug("orientation has shape: {}".format(orientation.shape))
+
+        self.logger.debug("dtype of self vars: {}, {}".format(self._Attention, self._NoRegress))
+
+        if bypass_detect==False:
+            new_xyz_out = tf.identity(new_xyz)
+            attention_out = tf.identity(attention)
+            orientation_out = tf.identity(orientation)
+
+            # During training, the output of the detector is bypassed.
+            if self._NoRegress==True:
+                rotate_orientation = tf.constant(False, dtype=bool, name="rotate_ori")
+            else:
+                rotate_orientation = tf.constant(True, dtype=bool, name="rotate_ori")
+
+            if self._Attention==False:
+                # Set attention==0 (so that a Tensor is always returned)
+                attention_out = tf.multiply(attention_out, 0.0)
+        else:
+            new_xyz_out = keypoint_subst
+            rotate_orientation = tf.constant(False, dtype=bool, name="rotate_ori")
+            attention_out = tf.multiply(attention, 0.0)
+            orientation_out = tf.multiply(orientation, 0.0)
 
         # update end_points
         if self.train_or_infer:
-            self.end_points['keypoints'] = new_xyz
+            self.end_points['keypoints'] = new_xyz_out
             self.end_points['attention'] = attention
             self.end_points['orientation'] = orientation
-
-        # During training, the output of the detector is bypassed.
-        orientation_cond = True
-        if self._NoRegress:
-            orientation_cond = False
-        if not self._Attention:
-            attention = tf.multiply(attention, 0.0)
-            # Set attention==0 (so that a Tensor is always returned)
-        
-        ### Feature Detection Layer
-        if bypass_detect is True:
-            new_xyz = keypoint_subst
-            attention = tf.multiply(attention, 0.0)
-            orientation_cond = False
 
         ## Feature Extraction Layer
         # Compute Sample and Group. 
         # `npoint` is always 512, so the 'other' branch of PointNetSA is unused.
-        new_xyz, new_points, idx, grouped_xyz, end_points_tmp = \
+        # print("#### Rotate_orientation bef sample_n_grp: {}".format(rotate_orientation))
+
+        # self.logger.debug("new_xyz has shape: {}".format(new_xyz.shape))
+
+        new_xyz_out, new_points, idx, grouped_xyz, end_points_tmp = \
             sample_and_group(npoint=512, radius=self._radius, nsample=self._num_samples, 
                         xyz=l0_xyz, points=l0_points, tnet_spec=None, knn=False, use_xyz=True, 
-                        keypoints=new_xyz, orientations=orientation,
-                        rotate_orientation=orientation_cond,
+                        keypoints=new_xyz_out, orientations=orientation_out,
+                        rotate_orientation=rotate_orientation,
                         normalize_radius=True)
+
+        # self.logger.debug(">>>> After Sample and Group")
+        # self.logger.debug("new_xyz has shape: {}".format(new_xyz.shape))
+        # self.logger.debug("new_points has shape: {}".format(new_points.shape))
 
         if self.train_or_infer:
             self.end_points.update(end_points_tmp)
 
         # Compute Conv2d_BN --> MaxPoolConcat --> Conv2d_BN --> MaxPoolAxis --> Conv2d_BN
         for layer in self.ext_layers:
+            # self.logger.debug("Layer: {}".format(layer.name))
+            # self.logger.debug("new_points has shape: {}".format(new_points.shape))
             new_points = layer(new_points, training)
 
-        new_points = tf.squeeze(new_points, [2])
-        new_points = tf.nn.l2_normalize(new_points, axis=2, epsilon=1e-8)
+        new_points = tf.squeeze(new_points, [2], name="features_squeeze")
+        new_points = tf.nn.l2_normalize(new_points, axis=2, epsilon=1e-8, name="features_l2_norm")
 
         # further computation if Train
         if self.train_or_infer:
-            self.end_points['output_xyz'] = new_xyz
+            self.end_points['output_xyz'] = new_xyz_out
             self.end_points['output_features'] = new_points
             
             if training:
-                new_xyz = tf.split(new_xyz, 3, axis=0)
+                new_xyz_out = tf.split(new_xyz_out, 3, axis=0)
                 new_points = tf.split(new_points, 3, axis=0)
                 # attention = tf.split(attention, 3, axis=0)[0] if attention is not None else None
-                attention = tf.split(attention, 3, axis=0)[0]
+                attention_out = tf.split(attention_out, 3, axis=0)[0]
 
-            return new_xyz, new_points, attention, self.end_points
+            return new_xyz_out, new_points, attention_out, self.end_points
         else:
-            return new_xyz, new_points, attention, {}
+            return new_xyz_out, new_points, attention_out, {}
     
     # def update_end_points_loss(self, attention_sm, sum_positive, sum_negative):
     #     self.end_points['normalized_attention'] = attention_sm
