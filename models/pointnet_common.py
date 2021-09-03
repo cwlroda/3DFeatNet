@@ -27,7 +27,6 @@ def sample_points(xyz, npoint):
     return new_xyz
 
 
-@tf.function
 def query_and_group_points(xyz, points, new_xyz, nsample, radius, knn=False,
                            use_xyz=True, use_points=False, use_orientations=False,
                            normalize_radius=True, orientations=None):
@@ -65,7 +64,6 @@ def query_and_group_points(xyz, points, new_xyz, nsample, radius, knn=False,
 
     return new_points, idx
 
-@tf.function
 def sample_and_group(npoint, radius, nsample, xyz, points, tnet_spec=None, knn=False, 
                     use_xyz=True, use_keypoints=True, use_tnet=False, use_points=False,
                     orientations=None, keypoints=None, 

@@ -5,21 +5,26 @@ Author: Zi Jian Yew <zijian.yew@comp.nus.edu.sg>
 '''
 
 import argparse
+import coloredlogs
 import logging
 import logging.config
 import numpy as np
 import os
 from sklearn.neighbors import NearestNeighbors
 import tensorflow as tf
+from tensorflow.python.keras.backend import dtype
 
 from config import *
 from data.datagenerator import DataGenerator
-from models.net_factory import get_network
+
+# from models.net_factory import get_network
+from models.feat3dnet import Feat3dNet, Feat3dNet_Describe
 from utils import get_tensors_in_checkpoint_file
 
 # Defaults
-CKPT_PATH = './ckpt/checkpoint.ckpt'
+CKPT_PATH = './ckpt/'
 MAX_POINTS = 30000
+IS_TRAINING = tf.constant(False, dtype=tf.bool)
 
 # Arguments
 parser = argparse.ArgumentParser(description='Trains pointnet')
@@ -56,14 +61,21 @@ parser.add_argument('--checkpoint', type=str, default=CKPT_PATH,
                     help='Checkpoint to restore from (optional)')
 parser.add_argument('--output_dir', type=str,
                     help='Directory to save results to')
+parser.add_argument('--model_savepath', type=str, default="inference_savedmodel",
+                        help="Directory to save model to")
 args = parser.parse_args()
 
 # Create Logging
 logging.config.fileConfig('logging.conf')
 logger = logging.getLogger(__name__)
-
+coloredlogs.install(level='DEBUG', logger=logger)
+model_savepath = os.path.join(os.getcwd(), args.model_savepath)
 
 def compute_descriptors():
+
+    # logger.info("Saving logs in {}".format(log_dir))
+    logger.info("Loading checkpoints from {}".format(args.checkpoint))
+    # logger.info("Saving SavedModels in {}".format(model_savepath))
 
     log_arguments()
 
@@ -80,147 +92,155 @@ def compute_descriptors():
     # Model
     param = {'NoRegress': False, 'BaseScale': args.base_scale, 'Attention': True,
              'num_clusters': -1, 'num_samples': args.num_samples, 'feature_dim': args.feature_dim}
-    model = get_network(args.model)(param)
 
-    # placeholders
-    is_training = tf.compat.v1.placeholder(tf.bool, name="is_training")
-    cloud_pl, _, _ = model.get_placeholders(data_dim)
+    # Get both Full model and Descriptor model
+    model = Feat3dNet(False, param=param)
+    model_describe = Feat3dNet_Describe(param=param)
 
-    # Ops1
-    xyz_op, features_op, attention_op, end_points = model.get_inference_model(cloud_pl, is_training, use_bn=USE_BN)
+    # init model 1
+    logger.info("Trying to find a checkpoint in {}".format(args.checkpoint))
+    model_find = tf.train.latest_checkpoint(args.checkpoint)
+    logger.info("Attempting to restore weights for 3DFeatNet Detect and Describe")
+    if model_find is not None:
+        model.load_weights(model_find)
+        logger.info('Restored weights from {}.'.format(model_find))
+    else:
+        logger.info('Unable to find a latest checkpoint in {}'.format(args.checkpoint))
+        exit(1)
 
-    with tf.Session(config=config) as sess:
+    logger.info("Attempting to restore weights for 3DFeatNet Describe only")
+    for layer in model_describe.layers:
+        # logger.debug("Restoring layer: {}".format(layer.name))
+        layer_rest = model.get_layer(name=layer.name)
+        layer.set_weights(layer_rest.get_weights())
+    
+    logger.info('Restored weights from {}.'.format(model_find))
 
-        initialize_model(sess, args.checkpoint)
+    num_processed = 0
+    inference_iterations = len(binFiles)
 
-        num_processed = 0
+    for iBin in range(0, inference_iterations):
+        binFile = binFiles[iBin]
+        fname_no_ext = binFile[:-4]
+        pointcloud = DataGenerator.load_point_cloud(os.path.join(args.data_dir, binFile), num_cols=data_dim)
 
-        # Training data
-        for iBin in range(0, len(binFiles)):
+        if args.randomize_points:
+            permutation = np.random.choice(pointcloud.shape[0], size=pointcloud.shape[0], replace=False)
+            inv_permutation = np.zeros_like(permutation)
+            inv_permutation[permutation] = range(0, pointcloud.shape[0])
+            pointcloud = pointcloud[permutation, :]
+        else:
+            inv_permutation = np.arange(0, pointcloud.shape[0], dtype=np.int64)
+        if args.num_points > 0:
+            pointcloud = pointcloud[:args.num_points, :]
 
-            binFile = binFiles[iBin]
-            fname_no_ext = binFile[:-4]
-            pointcloud = DataGenerator.load_point_cloud(os.path.join(args.data_dir, binFile), num_cols=data_dim)
+        pointclouds = pointcloud[None, :, :]
+        num_models = pointclouds.shape[0]
 
-            if args.randomize_points:
-                permutation = np.random.choice(pointcloud.shape[0], size=pointcloud.shape[0], replace=False)
-                inv_permutation = np.zeros_like(permutation)
-                inv_permutation[permutation] = range(0, pointcloud.shape[0])
-                pointcloud = pointcloud[permutation, :]
-            else:
-                inv_permutation = np.arange(0, pointcloud.shape[0], dtype=np.int64)
-            if args.num_points > 0:
-                pointcloud = pointcloud[:args.num_points, :]
+        if args.use_keypoints_from is None:
+            # Detect features
 
-            pointclouds = pointcloud[None, :, :]
-            num_models = pointclouds.shape[0]
+            # Compute attention in batches due to limited memory
+            xyz, attention = [], []
+            for startPt in range(0, pointcloud.shape[0], MAX_POINTS):
+                endPt = min(pointcloud.shape[0], startPt + MAX_POINTS)
+                xyz_subset = pointclouds[:, startPt:endPt, :3]
 
-            if args.use_keypoints_from is None:
-                # Detect features
+                logger.debug("#### Calling model with bypass=False")
+                # Compute attention over all points
+                xyz_cur, keypoints_cur, attention_cur, end_points_cur = \
+                    model(pointclouds, training=False)
 
-                # Compute attention in batches due to limited memory
-                xyz, attention = [], []
-                for startPt in range(0, pointcloud.shape[0], MAX_POINTS):
-                    endPt = min(pointcloud.shape[0], startPt + MAX_POINTS)
-                    xyz_subset = pointclouds[:, startPt:endPt, :3]
+                xyz.append(xyz_cur)
+                attention.append(attention_cur)
 
-                    # Compute attention over all points
-                    xyz_cur, attention_cur = \
-                        sess.run([xyz_op, attention_op],
-                                 feed_dict={cloud_pl: pointclouds, is_training: False,
-                                            end_points['keypoints']: xyz_subset})
+            xyz = np.concatenate(xyz, axis=1)
+            attention = np.concatenate(attention, axis=1)
+            logger.debug("keypoint shape: {}".format(xyz.shape))
+            logger.debug("attention shape: {}".format(attention.shape))
 
-                    xyz.append(xyz_cur)
-                    attention.append(attention_cur)
+            # Uncomment to save out attention to file
+            '''
+            with open(os.path.join(args.output_dir, '{}_attention.bin'.format(fname_no_ext)), 'wb') as f:
+                if args.num_points > 0:
+                    xyz_attention = np.concatenate((xyz[0, :, :],
+                                                    np.expand_dims(attention[0, :], 1),), axis=1)
+                else:
+                    xyz_attention = np.concatenate((xyz[0, inv_permutation, :],
+                                                    np.expand_dims(attention[0, inv_permutation], 1),), axis=1)
+                xyz_attention.tofile(f)
+            '''
 
-                xyz = np.concatenate(xyz, axis=1)
-                attention = np.concatenate(attention, axis=1)
-
-                # # Uncomment to save out attention to file
-                # with open(os.path.join(args.output_dir, '{}_attention.bin'.format(fname_no_ext)), 'wb') as f:
-                #     if args.num_points > 0:
-                #         xyz_attention = np.concatenate((xyz[0, :, :],
-                #                                         np.expand_dims(attention[0, :], 1),), axis=1)
-                #     else:
-                #         xyz_attention = np.concatenate((xyz[0, inv_permutation, :],
-                #                                         np.expand_dims(attention[0, inv_permutation], 1),), axis=1)
-                #     xyz_attention.tofile(f)
-
-                # Non maximal suppression to select keypoints based on attention
-                xyz_nms, attention_nms, num_keypoints = nms(xyz, attention)
-
-            else:
-                # Load keypoints from file
-                xyz_nms = []
-                for i in range(num_models):
-                    kp_fname = os.path.join(args.use_keypoints_from, '{}_kp.bin'.format(fname_no_ext))
-                    xyz_nms.append(DataGenerator.load_point_cloud(kp_fname, num_cols=3))
-
-                # Pad to make same size
-                num_keypoints = [kp.shape[0] for kp in xyz_nms]
-                largest_kp_count = max(num_keypoints)
-                for i in range(num_models):
-                    num_to_pad = largest_kp_count-xyz_nms[i].shape[0]
-                    to_pad_with = np.repeat(xyz_nms[i][0,:][None, :], num_to_pad, axis=0)
-                    xyz_nms[i] = np.concatenate((xyz_nms[i], to_pad_with), axis=0)
-                xyz_nms = np.stack(xyz_nms, axis=0)
-
-            # Compute features
-            xyz, features = \
-                sess.run([xyz_op, features_op],
-                         feed_dict={cloud_pl: pointclouds, is_training: False, end_points['keypoints']: xyz_nms})
-
-            # Save out the output
-            with open(os.path.join(args.output_dir, '{}.bin'.format(fname_no_ext)), 'wb') as f:
-                xyz_features = np.concatenate([xyz[0, 0:num_keypoints[0], :], features[0, 0:num_keypoints[0], :]],
-                                              axis=1)
-                xyz_features.tofile(f)
-
-            num_processed += 1
-            logger.info('Processed %i / %i images', num_processed, len(binFiles))
-
-
-def initialize_model(sess, checkpoint, ignore_missing_vars=False, restore_exclude=None):
-    logger.info('Initializing weights')
-
-    sess.run(tf.compat.v1.global_variables_initializer())
-
-    if checkpoint is not None:
-
-        logger.info('Restoring model from {}'.format(args.checkpoint))
-
-        model_var_list = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES)
-        exclude_list = []
-        if restore_exclude is not None:
-            for e in restore_exclude:
-                exclude_list += tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, scope=e)
-        for e in exclude_list:
-            logger.info('Excluded from model restore: %s', e.op.name)
-
-        if ignore_missing_vars:
-            checkpoint_var_names = get_tensors_in_checkpoint_file(checkpoint)
-            missing = [m.op.name for m in model_var_list if m.op.name not in checkpoint_var_names and m not in exclude_list]
-
-            for m in missing:
-                logger.warning('Variable missing from checkpoint: %s', m)
-
-            var_list = [m for m in model_var_list if m.op.name in checkpoint_var_names and m not in exclude_list]
+            # Non maximal suppression to select keypoints based on attention
+            xyz_nms, attention_nms, num_keypoints = nms(xyz, attention)
 
         else:
-            var_list = [m for m in model_var_list if m not in exclude_list]
+            # Load keypoints from file
+            xyz_nms = []
+            for i in range(num_models):
+                kp_fname = os.path.join(args.use_keypoints_from, '{}_kp.bin'.format(fname_no_ext))
+                xyz_nms.append(DataGenerator.load_point_cloud(kp_fname, num_cols=3))
 
-        saver = tf.train.Saver(var_list)
+            # Pad to make same size
+            num_keypoints = [kp.shape[0] for kp in xyz_nms]
+            largest_kp_count = max(num_keypoints)
+            for i in range(num_models):
+                num_to_pad = largest_kp_count-xyz_nms[i].shape[0]
+                to_pad_with = np.repeat(xyz_nms[i][0,:][None, :], num_to_pad, axis=0)
+                xyz_nms[i] = np.concatenate((xyz_nms[i], to_pad_with), axis=0)
+            xyz_nms = np.stack(xyz_nms, axis=0)
 
-        saver.restore(sess, checkpoint)
+        # Compute features
+        logger.debug("#### Calling model with bypass=True")
+        logger.debug("XYZ_nms shape: {}".format(xyz_nms.shape))
+        xyz, features = model_describe(
+            {'pointcloud': pointclouds, 'keypoints': xyz_nms}
+        )
 
-    logger.info('Weights initialized')
+        logger.debug("Bypass keypoint shape: {}".format(xyz.shape))
+        logger.debug("Bypass features shape: {}".format(features.shape))
+        logger.debug("Bypass attention shape: {}".format(attention.shape))
+        # xyz, features = \
+        #     sess.run([xyz_op, features_op],
+        #                 feed_dict={cloud_pl: pointclouds, is_training: False, end_points['keypoints']: xyz_nms})
 
+        # Save out the output
+        with open(os.path.join(args.output_dir, '{}.bin'.format(fname_no_ext)), 'wb') as f:
+            xyz_features = np.concatenate([xyz[0, 0:num_keypoints[0], :], features[0, 0:num_keypoints[0], :]],
+                                            axis=1)
+            xyz_features.tofile(f)
+
+        # if num_processed == 0:
+        #     model.summary(line_length=90, print_fn=logger.info)
+            
+        num_processed += 1
+        logger.info('Processed %i / %i images', num_processed, len(binFiles))
+
+        # # Doesn't yet work. Supposed to write graph to summary filewriter.
+        # tb_callback = tf.keras.callbacks.TensorBoard(model_savepath)
+        # tb_callback.set_model(model)
+
+        # writer = tf.summary.create_file_writer(model_savepath)
+        # with writer.as_default():
+        #     tf.summary.scalar("Test", num_processed, step=num_processed)
+            
+        #     writer.flush()
+        # logger.info("Saved model representation/graph to TensorBoard.")
+        # assert 0
+
+    logger.info("Saving inference model...")
+    detect_describe_savepath = os.path.join(model_savepath, 'det_desc')
+    describe_only_savepath = os.path.join(model_savepath, 'desc_only')
+    model.save(detect_describe_savepath)
+    logger.info("Saved 'Detect+Describe' model in {}".format(detect_describe_savepath))   
+    model_describe.save(describe_only_savepath)
+    logger.info("Saved 'Describe Only' model in {}".format(describe_only_savepath))
+    # save models after everything is done
 
 def log_arguments():
     s = '\n'.join(['    {}: {}'.format(arg, getattr(args, arg)) for arg in vars(args)])
     s = 'Arguments:\n' + s
     logger.info(s)
-
 
 def nms(xyz, attention):
 
@@ -246,25 +266,26 @@ def nms(xyz, attention):
         is_max_attention = sorted(is_max_attention, reverse=True)
         max_indices = [m[1] for m in is_max_attention]
 
+        logger.debug("max_indices length: {}".format(len(max_indices)))
+
         if len(max_indices) >= args.max_keypoints:
             max_indices = max_indices[:args.max_keypoints]
             num_keypoints[i] = len(max_indices)
         else:
             num_keypoints[i] = len(max_indices)  # Retrain original number of points
             max_indices = np.pad(max_indices, (0, args.max_keypoints - len(max_indices)), 'constant',
-                                 constant_values=max_indices[0])
+                                constant_values=max_indices[0])
 
         xyz_nms[i, :, :] = xyz[i, max_indices, :]
         attention_nms[i, :] = attention[i, max_indices]
 
     return xyz_nms, attention_nms, num_keypoints
 
-
 if __name__ == '__main__':
 
-    config = tf.ConfigProto()
-    config.allow_soft_placement = True
-    config.gpu_options.allow_growth = True
+    # config = tf.ConfigProto() 
+    # config.allow_soft_placement = True    
+    # config.gpu_options.allow_growth = True    
     os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
     gpu_string = '/gpu:{}'.format(args.gpu)
 

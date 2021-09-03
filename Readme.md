@@ -55,7 +55,7 @@ Training is divided into 2 stages, where the first stage only trains the descrip
 
 Training takes around 1-1.5 days to saturate. During training, progress can be monitored by running `tensorboard --logdir=./ckpt` from the root folder, and the false alarm rate will be shown in the fp_rate graph.
 
-### Inference on Example data
+### Inference on Example data in Python
 
 1. Run `inference_example.sh` which will load the pretrained model in the folder `ckpt` and generate the keypoints and descriptors for the example data in `example_data`. A sample checkpoint can be downloaded from [here](https://drive.google.com/open?id=1JYZvFmMO3hgLN4ao3MqcMVgHYZtHhPOv). The output will be stored in `example_data/results`.
 2. Run the MATLAB script `scripts/computeAndVisualizeMatches.m` which will match the features, estimate the relative transformation (with RANSAC) between the point clouds and display the results.
@@ -71,16 +71,19 @@ Refer to [scripts_data_processing/Readme.md](scripts_data_processing/Readme.md).
 ## Conversion to ONNX
 To convert the trained model for inference into ONNX format, first wait for training to complete. Subsequently, run the `inference_example.sh` script, which will call sample data on the model so that a `SavedModel` can be built. Subsequently, it will save the TensorFlow `SavedModel` to a directory (by defaut, `./ckpt/infer_model`).
 
-Subsequently, call the `tf2onnx.convert` submodule (should be installed as part of `requirements.txt`):
+Running `inference_example.sh` in the previous step automatically converts and saves the converted ONNX models to the `onnx_models` folder.
+Two models are saved: One which runs the _"detect then describe"_ part of the 3DFeatNet computation graph, and another which purely runs the "description" part of the network. This is unfortunately necessary due to difficulties in converting if/else blocks of code into ONNX and beyond.
+
+If you wish to convert the SavedModels in isolation, call the `tf2onnx.convert` submodule (should be installed as part of `requirements.txt`):
 ```bash
 python -m tf2onnx.convert \
---saved-model ./inference_savedmodel/ --output onnx_models/model_infer.onnx \
+--saved-model /path/to/saved/model --output /path/to/output/onnx \
 --load_op_libraries ./tf_ops/grouping/tf_grouping_so.so,./tf_ops/sampling/tf_sampling_so.so \
 --rename-inputs pointcloud --rename-outputs keypoints,features,attention \
 --custom-ops QueryBallPoint,GroupPoint,FarthestPointSample,GatherPoint,KnnPoint \
---opset 13  # Can be changed as per requirements in trtexec
+--opset 13 
 ```
-This will save an `onnx` model named `model_infer.onnx` in the 3DFeatNet base directory. The model can then be verified visually calling `netron model_infer.onnx`.
+This will save an `onnx` in the specified directory. The model can then be verified visually calling `netron /model/savepath.onnx`.
 
 ## Setting up the TensorRT development environment
 TensorRT comes with a prebuilt Docker container with TensorRT 8.x in Ubuntu 18.04 with CUDA 11.3. We modified the Dockerfile to include the resources we have been using.
