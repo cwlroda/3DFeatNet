@@ -55,8 +55,8 @@ RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-4.7.12-Linux-x86
     /bin/bash ~/miniconda.sh -b -p /opt/conda && \
     rm ~/miniconda.sh
 RUN ln -s /opt/conda/etc/profile.d/conda.sh /etc/profile.d/conda.sh
-RUN echo ". /opt/conda/etc/profile.d/conda.sh" >> /home/trtuser/.bashrc && \
-    echo "conda activate base" >> /home/trtuser/.bashrc
+RUN echo ". /opt/conda/etc/profile.d/conda.sh" >> /.bashrc && \
+    echo "conda activate base" >> /.bashrc
 
 RUN apt install -y curl grep sed dpkg && \
     TINI_VERSION=`curl https://github.com/krallin/tini/releases/latest | grep -o "/v.*\"" | sed 's:^..\(.*\).$:\1:'` && \
@@ -118,8 +118,8 @@ ENV LD_LIBRARY_PATH="/opt/conda/envs/tf2/lib/python3.7/site-packages/tensorflow/
 
 # Enable the conda env as well as colour terminal
 RUN echo "Recovering things at the end"
-RUN sed -i "s|activate base|activate tf2|g" /home/trtuser/.bashrc
-RUN sed -i "s|#force_color|force_color|g" /home/trtuser/.bashrc
+RUN sed -i "s|activate base|activate tf2|g" /.bashrc
+RUN sed -i "s|#force_color|force_color|g" /.bashrc
 
 USER trtuser
 RUN ["/bin/bash"]

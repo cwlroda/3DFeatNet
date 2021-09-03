@@ -100,12 +100,16 @@ sudo docker build -f "${FN3D_LOC}/docker/ubuntu-18.04_modded.Dockerfile" \
 ```
 To run the Docker image, run
 ```bash
-sudo docker run -it -v "${FN3D_LOC}/..":"/workspace" \  # This ensures that the TensorRT and onnx-trt build folders can be found.
--p 80 -p 6006:6008 \                                    # binds ports for HTTP and TensorBoard.
+# This ensures that the TensorRT and onnx-trt build folders can be found.
+# Ports are bound for HTTP and TensorBoard.
+# Also runs as root!
+sudo docker run -it -v "${FN3D_LOC}/..":"/workspace" \
+-u root -p 80 -p 6006:6008 \
 --gpus all ${ARG_IMAGENAME}:latest
 ```
 When inside the Docker image, run
 ```bash
+source /home/trtuser/.bashrc
 bash 3DFeatNet/docker/startup.sh
 ```
 This installs the TensorRT and onnx-trt inside the Docker image. You can also edit this script to your liking.
@@ -123,12 +127,19 @@ This builds the grouping ops `QueryBallPoint` and `GroupPoint`, and puts their `
 
 Navigate to the 3DFeatNet repo in the container workspace and run the following:
 ```bash
-trtexec --onnx=./onnx_models/model_infer.onnx \
+set -e
+trtexec --onnx=./onnx_models/model_det_desc.onnx \
 --plugins=./TensorRT/ops/grouping/build/libPointNetGroupingOps.so \
 --plugins=./TensorRT/ops/sign/build/libSignOps.so \
---saveEngine=./TensorRT/model_infer.lib
+--saveEngine=./TensorRT/model_det_desc.lib
+
+trtexec --onnx=./onnx_models/model_desc_only.onnx \
+--plugins=./TensorRT/ops/grouping/build/libPointNetGroupingOps.so \
+--plugins=./TensorRT/ops/sign/build/libSignOps.so \
+--saveEngine=./TensorRT/model_desc_only.lib
 ```
-If successful, it registers the inference engine in `./TensorRT/model_infer.lib`. You can validate the model building by running it with random-valued data:
+
+If successful, it registers the inference engines in `./TensorRT/` as `model_det_desc.lib` and `model_desc_only.lib`. You can validate the model building by running it with random-valued data:
 ```bash
 trtexec --shapes=input:1x1x16384x6 --loadEngine=./TensorRT/model_infer.lib \
 --plugins=./TensorRT/ops/grouping/build/libPointNetGroupingOps.so \
