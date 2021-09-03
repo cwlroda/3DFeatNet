@@ -1,7 +1,7 @@
 #/bin/bash
 
 DATASET_DIR=./data/oxford
-LOG_DIR=./ckpt_1
+LOG_DIR=./ckpt
 GPU_ID=0  # No more multi GPU for now
 
 set -e
