@@ -113,13 +113,15 @@ class Feat3dNet(tf.keras.Model):
                 )
 
     @tf.function
-    def call(self, pointcloud, training=False):
+    def call(self, inputs, training=False):
         '''
         ### Forward pass of network.
 
         #### Inputs:
         - "pointcloud" (tf.Tensor): Input point cloud of dimension 
             (batch_size, ndataset, 3)
+        - "bypass" (bool): Whether to bypass detection (in TF)
+        - keypoints (tf.Tensor): What to subt into new_points if bypass is True
         - training(bool): indicates training or inference on layers called.
 
         #### Outputs:
@@ -128,8 +130,16 @@ class Feat3dNet(tf.keras.Model):
         - attention
         - end_points
         '''
-        self.logger.debug("Tracing the function with input types:")
-        self.logger.debug("pointcloud: {}".format(type(pointcloud)))
+
+        # 
+        pointcloud = inputs['pointcloud']
+        bypass = inputs['bypass']
+        keypoints = inputs['keypoints']
+
+        # self.logger.debug("Tracing the function with input types:")
+        # self.logger.debug("pointcloud: Type: {}, Shape: {}".format(type(pointcloud), pointcloud.shape))
+        # self.logger.debug("bypass: Type: {}, Shape: {}".format(type(bypass), bypass.shape))
+        # self.logger.debug("keypoints: Type: {}, Shape: {}".format(type(keypoints), keypoints.shape))
 
         if self.train_or_infer:
             self.end_points['input_pointclouds'] = pointcloud
@@ -177,6 +187,10 @@ class Feat3dNet(tf.keras.Model):
             self.end_points['keypoints'] = new_xyz
             self.end_points['attention'] = attention
             self.end_points['orientation'] = orientation
+
+        if bypass==True:
+            new_points = keypoints
+            use_orientation = False
 
         new_xyz, new_points, idx, grouped_xyz, end_points_tmp = \
         sample_and_group(npoint=512, radius=self._radius, nsample=self._num_samples, 
@@ -282,7 +296,6 @@ class Feat3dNet_Describe(tf.keras.Model):
                 )
 
     @tf.function(input_signature=[{
-
         'pointcloud': tf.TensorSpec([None, None, 6], dtype=tf.float32, name="pointcloud"),
         'keypoints': tf.TensorSpec([None, None, 3], dtype=tf.float32, name="keypoints")
     }])
@@ -340,3 +353,54 @@ class Feat3dNet_Describe(tf.keras.Model):
         new_points = tf.nn.l2_normalize(new_points, axis=2, epsilon=1e-8, name="features_l2_norm")
 
         return new_xyz, new_points
+
+class AttentionWeightedAlignmentLoss(tf.keras.losses.Loss):
+    '''
+    Subclassed Loss function to calculate the Attention Weighted alignment loss.
+    '''
+    def __init__(self, attention: bool, margin: float, model):
+        super().__init__()
+        self.attention = attention
+        self.margin = margin
+        self.model = model
+
+    # @tf.function
+    def call(self, y_true, y_pred):
+        """ 
+        Computes the attention weighted alignment loss as described in our paper.
+        Args:
+            y_true: Attention from anchor point clouds
+            y_pred: List of [anchor_features, positive_features, negative_features]
+            model: Feat3dNet object to udpate end_points
+        Returns:
+            loss (tf.Tensor scalar)
+        """
+        # Simple stacking
+        anchors, positives, negatives = y_pred
+
+        # Computes for each feature of the anchor, the distance to the nearest feature in the positive and negative
+        positive_dist = pairwise_dist(anchors, positives)
+        best_positive = tf.reduce_min(positive_dist, axis=2)
+        # del positive_dist   # hacky memory management
+
+        negative_dist = pairwise_dist(anchors, negatives)
+        best_negative = tf.reduce_min(negative_dist, axis=2)
+        # del negative_dist   # hacky memory management
+
+        if not self.attention:
+            sum_positive = tf.reduce_mean(best_positive, 1)
+            sum_negative = tf.reduce_mean(best_negative, 1)
+        else:
+            attention_sm = y_true / tf.reduce_sum(y_true, axis=1)[:, None]
+            sum_positive = tf.reduce_sum(attention_sm * best_positive, 1)
+            sum_negative = tf.reduce_sum(attention_sm * best_negative, 1)
+
+            tf.summary.histogram("normalized_attention", attention_sm)
+            self.model.end_points['normalized_attention'] = attention_sm
+
+        self.model.end_points['sum_positive'] = sum_positive
+        self.model.end_points['sum_negative'] = sum_negative
+        triplet_cost = tf.maximum(0., sum_positive - sum_negative + self.margin)
+        loss = tf.reduce_mean(triplet_cost)
+
+        return loss

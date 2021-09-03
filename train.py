@@ -4,10 +4,12 @@ import logging.config
 import numpy as np
 import os
 import sys
+
+from tensorflow.python.keras.constraints import NonNeg
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '0'    # All logging messages
 import tensorflow as tf
 
-from models.feat3dnet import Feat3dNet, AttentionWeightedAlignmentLoss
+from models.feat3dnet import Feat3dNet, AttentionWeightedAlignmentLoss, Feat3dNet_Describe
 
 from config import *
 from data.datagenerator import DataGenerator
@@ -133,11 +135,15 @@ def train(gpu_list):
     # with mirrored_strat.scope():
 
     model = Feat3dNet(True, param=param)
+    model_describe = Feat3dNet_Describe(param=param)    # purely for validation
 
     # Need to put in a dummy input to initialize the model.
     rand_input = tf.concat([tf.random.normal([BATCH_SIZE, args.num_points, args.data_dim])]*3, axis=0)
-    inputs = {'pointcloud': rand_input, 'bypass': False, 'keypoints': 0.0}
-    model(inputs, True)
+    model( {
+        'pointcloud': rand_input,
+        'bypass': False,
+        'keypoints': None
+    }, True)
 
     # Extract initialised weights out of the model, for restoration later.
     raw_weights = {}
@@ -182,10 +188,6 @@ def train(gpu_list):
     test_writer = tf.summary.create_file_writer(os.path.join(args.log_dir, 'test'))
     train_writer.init()
     test_writer.init()
-
-    tb_callback = tf.keras.callbacks.TensorBoard(os.path.join(args.log_dir, 'train'))
-    tb_callback.set_model(model)
-    logger.info("Saved model representation/graph to TensorBoard.")
 
     logger.info('Training Batch size: %i, validation batch size: %i', BATCH_SIZE, VAL_BATCH_SIZE)
     logger.info("TF Executing Eagerly? {}".format(tf.executing_eagerly() ))  # Shld be true
@@ -238,8 +240,10 @@ def train(gpu_list):
                     tape_train.watch([model.trainable_weights])
 
                     # Run forward pass
-                    inputs = {'pointcloud': point_cloud, 'bypass': False, 'keypoints': 0.0}
-                    _1, features, att, end_points = model(inputs, training=True)
+                    _1, features, att, end_points = model({
+                        'pointcloud': point_cloud,
+                        'bypass': False, 'keypoints': None
+                        }, training=True)
 
                     loss_val = loss_fn(att, features)
 
@@ -256,16 +260,18 @@ def train(gpu_list):
                 model.save_weights(checkpoint_path)
                 logger.info("At step {}, saved checkpoint at {}.".format(step, checkpoint_path))
 
-            savedModel_every_n_steps = args.checkpoint_every_n_steps * 10
-            if step % savedModel_every_n_steps == 0:
-                model.save(model_savepath)
-                logger.info("At step {}, saved SavedModel at {}.".format(step, model_savepath))
-            
+            # Saving a model is not useful.
+            # savedModel_every_n_steps = args.checkpoint_every_n_steps * 10
+            # if step % savedModel_every_n_steps == 0:
+            #     model.save(model_savepath)
+            #     logger.info("At step {}, saved SavedModel at {}.".format(step, model_savepath))
+
             # # Run through validation data
             if step % args.validate_every_n_steps == 0 or step == 1:
                 # print()
                 # ---------------------------- TEST EVAL -----------------------
-                fp_rate = validate(model, val_folder, val_groundtruths, args.data_dim)
+                fp_rate = validate(model, val_folder, 
+                                    val_groundtruths, args.data_dim)
 
                 with test_writer.as_default():
                     tf.summary.scalar("fp_rate", fp_rate, step=step)
@@ -307,7 +313,6 @@ def validate(model, val_folder, val_groundtruths, data_dim):
     negative_dist = []
 
     for iTest in range(0, len(val_groundtruths), NUM_CLUSTERS):
-        
         clouds1, clouds2 = [], []
         # We batch the validation by stacking all the validation clusters into a single point cloud,
         # while keeping them apart such that they do not overlap each other. This way NUM_CLUSTERS
@@ -334,6 +339,8 @@ def validate(model, val_folder, val_groundtruths, data_dim):
 
         clouds1 = np.concatenate(clouds1, axis=0)[None, :, :]
         clouds2 = np.concatenate(clouds2, axis=0)[None, :, :]
+
+
         inputs = {'pointcloud': clouds1, 'bypass': True, 'keypoints': offsets}
         xyz1, features1, _, _ = model(inputs, training=False)
         inputs = {'pointcloud': clouds2, 'bypass': True, 'keypoints': offsets}

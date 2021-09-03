@@ -1,7 +1,7 @@
 #/bin/bash
 
 DATASET_DIR=./data/oxford
-LOG_DIR=./ckpt_3
+LOG_DIR=./ckpt_1
 GPU_ID=0  # No more multi GPU for now
 
 set -e
@@ -14,7 +14,7 @@ python train.py \
   --noattention --noregress \
   --num_epochs 2 \
   --gpu $GPU_ID \
-  --validate_every_n_steps 1000
+  --validate_every_n_steps 250
 
 # Second stage training: Performance should saturate in ~60 epochs
 python train.py \

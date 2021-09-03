@@ -149,7 +149,10 @@ def compute_descriptors():
                 logger.debug("#### Calling model with bypass=False")
                 # Compute attention over all points
                 xyz_cur, keypoints_cur, attention_cur, end_points_cur = \
-                    model(pointclouds, training=False)
+                    model({
+                        'pointcloud': pointclouds,
+                        'bypass': False,
+                        'keypoints': None}, training=False)
 
                 xyz.append(xyz_cur)
                 attention.append(attention_cur)
