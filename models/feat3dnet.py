@@ -229,6 +229,58 @@ class Feat3dNet(tf.keras.Model):
         else:
             return new_xyz, new_points, attention, {}
 
+class AttentionWeightedAlignmentLoss(tf.keras.losses.Loss):
+    '''
+    Subclassed Loss function to calculate the Attention Weighted alignment loss.
+    '''
+    def __init__(self, attention: bool, margin: float, model):
+        super().__init__()
+        self.attention = attention
+        self.margin = margin
+        self.model = model
+
+    # @tf.function
+    def call(self, y_true, y_pred):
+        """ 
+        Computes the attention weighted alignment loss as described in our paper.
+        Args:
+            y_true: Attention from anchor point clouds
+            y_pred: List of [anchor_features, positive_features, negative_features]
+            model: Feat3dNet object to udpate end_points
+        Returns:
+            loss (tf.Tensor scalar)
+        """
+        # Simple stacking
+        anchors, positives, negatives = y_pred
+
+        # Computes for each feature of the anchor, the distance to the nearest feature in the positive and negative
+        positive_dist = pairwise_dist(anchors, positives)
+        best_positive = tf.reduce_min(positive_dist, axis=2)
+        # del positive_dist   # hacky memory management
+
+        negative_dist = pairwise_dist(anchors, negatives)
+        best_negative = tf.reduce_min(negative_dist, axis=2)
+        # del negative_dist   # hacky memory management
+
+        if not self.attention:
+            sum_positive = tf.reduce_mean(best_positive, 1)
+            sum_negative = tf.reduce_mean(best_negative, 1)
+        else:
+            attention_sm = y_true / tf.reduce_sum(y_true, axis=1)[:, None]
+            sum_positive = tf.reduce_sum(attention_sm * best_positive, 1)
+            sum_negative = tf.reduce_sum(attention_sm * best_negative, 1)
+
+            tf.summary.histogram("normalized_attention", attention_sm)
+            self.model.end_points['normalized_attention'] = attention_sm
+
+        self.model.end_points['sum_positive'] = sum_positive
+        self.model.end_points['sum_negative'] = sum_negative
+        triplet_cost = tf.maximum(0., sum_positive - sum_negative + self.margin)
+        loss = tf.reduce_mean(triplet_cost)
+
+        return loss
+
+# Detector model only. Not used.
 """
 class Feat3dNet_Describe(tf.keras.Model):
     '''
@@ -237,7 +289,7 @@ class Feat3dNet_Describe(tf.keras.Model):
     the main 3DFeatNet model.
     '''
     def __init__(self, name="3dFN_Desc", param=None):
-        """ Constructor: Creates the 3dFeatNet model by calling its relevant sub-objects.
+        ''' Constructor: Creates the 3dFeatNet model by calling its relevant sub-objects.
 
         Args:
             param:    Python dict containing the algorithm parameters. It should contain the
@@ -249,7 +301,7 @@ class Feat3dNet_Describe(tf.keras.Model):
                         'num_clusters': Number of clusters [512]
                         'num_samples': Maximum number of points per cluster [64]
                         'margin': Triplet loss margin [0.2]
-        """
+        '''
         super(Feat3dNet_Describe, self).__init__(name=name)
 
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -415,54 +467,3 @@ class Feat3dNet_Describe(tf.keras.Model):
 
         return new_xyz, new_points
 """
-
-class AttentionWeightedAlignmentLoss(tf.keras.losses.Loss):
-    '''
-    Subclassed Loss function to calculate the Attention Weighted alignment loss.
-    '''
-    def __init__(self, attention: bool, margin: float, model):
-        super().__init__()
-        self.attention = attention
-        self.margin = margin
-        self.model = model
-
-    # @tf.function
-    def call(self, y_true, y_pred):
-        """ 
-        Computes the attention weighted alignment loss as described in our paper.
-        Args:
-            y_true: Attention from anchor point clouds
-            y_pred: List of [anchor_features, positive_features, negative_features]
-            model: Feat3dNet object to udpate end_points
-        Returns:
-            loss (tf.Tensor scalar)
-        """
-        # Simple stacking
-        anchors, positives, negatives = y_pred
-
-        # Computes for each feature of the anchor, the distance to the nearest feature in the positive and negative
-        positive_dist = pairwise_dist(anchors, positives)
-        best_positive = tf.reduce_min(positive_dist, axis=2)
-        # del positive_dist   # hacky memory management
-
-        negative_dist = pairwise_dist(anchors, negatives)
-        best_negative = tf.reduce_min(negative_dist, axis=2)
-        # del negative_dist   # hacky memory management
-
-        if not self.attention:
-            sum_positive = tf.reduce_mean(best_positive, 1)
-            sum_negative = tf.reduce_mean(best_negative, 1)
-        else:
-            attention_sm = y_true / tf.reduce_sum(y_true, axis=1)[:, None]
-            sum_positive = tf.reduce_sum(attention_sm * best_positive, 1)
-            sum_negative = tf.reduce_sum(attention_sm * best_negative, 1)
-
-            tf.summary.histogram("normalized_attention", attention_sm)
-            self.model.end_points['normalized_attention'] = attention_sm
-
-        self.model.end_points['sum_positive'] = sum_positive
-        self.model.end_points['sum_negative'] = sum_negative
-        triplet_cost = tf.maximum(0., sum_positive - sum_negative + self.margin)
-        loss = tf.reduce_mean(triplet_cost)
-
-        return loss
