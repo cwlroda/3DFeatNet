@@ -18,7 +18,7 @@ from config import *
 from data.datagenerator import DataGenerator
 
 # from models.net_factory import get_network
-from models.feat3dnet import Feat3dNet, Feat3dNet_Describe
+from models.feat3dnet import Feat3dNet
 from utils import get_tensors_in_checkpoint_file
 
 # Defaults

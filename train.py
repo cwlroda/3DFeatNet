@@ -9,7 +9,7 @@ from tensorflow.python.keras.constraints import NonNeg
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '0'    # All logging messages
 import tensorflow as tf
 
-from models.feat3dnet import Feat3dNet, AttentionWeightedAlignmentLoss, Feat3dNet_Describe
+from models.feat3dnet import Feat3dNet, AttentionWeightedAlignmentLoss
 
 from config import *
 from data.datagenerator import DataGenerator
