@@ -6,6 +6,8 @@
 
 This work is based on our ECCV2018 paper. 3DFeat-Net is an approach for learning features for point cloud geometric registration under weak-supervision, where the supervision is given in terms of whether 2 point clouds have very high overlap or low (or no) overlap. For details, please read our paper which can be found on [arXiv](https://arxiv.org/abs/1807.09413).
 
+This particular branch is a fork of 3DFeatNet, converted to run in TensorFlow 2.x, with instructions on how to convert the resultant SavedModel into a TensorRT engine via an ONNX intermediate.
+
 Bibtex:
 
 ```
@@ -21,10 +23,10 @@ Bibtex:
 
 This version of the code is developed and tested on the following environment:
 
-* Python ~~3.5~~ <b>3.7.11</b>
-* Tensorflow ~~1.4~~ <b>2.5.0</b> (with Cuda ~~8.0~~ <b>11.1</b>)
-* Numpy ~~1.13.3~~ <b>1.19.5</b>
-* Scikit-learn ~~0.19.1~~ <b>0.24.2</b>
+* Python **3.7.11**
+* Tensorflow **2.5**
+* CUDA **11.4**
+* TensorRT **8.0**
 
 We also use MATLAB scripts for evaluation and processing of data.
 
@@ -38,8 +40,7 @@ The network model is in `models/feat3dnet.py`.
 
 Before using the model, you first need to compile the customized tf_ops in the folder `tf_ops` (we use the customized grouping and sampling ops from [PointNet++](https://github.com/charlesq34/pointnet2)).
 
-`cd` to `tf_ops` and run `bash tf_ops_compile.sh`. If `nvcc` is not added to path, so do first.
-~~Check and execute `tf_xxx_compile.sh` under each subfolder. Update the python and nvcc file if necessary. The scripts has been updated for TF1.4, so if you're using TF version < 1.4, refer to the original script provided with PointNet++ for compilation.~~
+`cd` to `tf_ops` and run `bash tf_ops_compile.sh`. If `nvcc` is not added to path, so do first. If errors are thrown, or the displayed `CUDA` version is wrong, look into the `tf_ops_compile.sh` file and set the `NVCC_VER` variable to the desired version.
 
 ### Training
 
@@ -143,4 +144,6 @@ trtexec --shapes=in_pointcloud:1x16384x6,in_keypoints:1x16384x3 \
 ```
 It should output something like `&&&& PASSED TensorRT.trtexec [TensorRT v8001]...`.
 
-## Running inference in TensorRT
+Subsequently, you can move the file to the `CSLM` directory (or wherever you need to use it), and call inference there. The code to run inference using the TensorRT engine is quite convoluted, and not covered here. It is in the `CSLM` directory.
+
+************
