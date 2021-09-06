@@ -17,15 +17,15 @@ echo -e "##############################################\n\n\n"
 python -m tf2onnx.convert \
 --saved-model ./inference_savedmodel/det_desc --output onnx_models/model_det_desc.onnx \
 --load_op_libraries ./tf_ops/grouping/tf_grouping_so.so,./tf_ops/sampling/tf_sampling_so.so \
---rename-inputs pointcloud --rename-outputs keypoints,features,attention \
+--rename-inputs in_keypoints,in_pointcloud --rename-outputs out_keypoints,out_features,out_attention \
 --custom-ops QueryBallPoint,GroupPoint --opset ${ONNX_OPSET} --target tensorrt
 
-echo -e "\n\n\n##############################################"
-echo "####### Converting Describe-only model #######"
-echo -e "##############################################\n\n\n"
+# echo -e "\n\n\n##############################################"
+# echo "####### Converting Describe-only model #######"
+# echo -e "##############################################\n\n\n"
 
-python -m tf2onnx.convert \
---saved-model ./inference_savedmodel/desc_only --output onnx_models/model_desc_only.onnx \
---load_op_libraries ./tf_ops/grouping/tf_grouping_so.so,./tf_ops/sampling/tf_sampling_so.so \
---rename-outputs keypoints,features \
---custom-ops QueryBallPoint,GroupPoint --opset ${ONNX_OPSET} --target tensorrt
+# python -m tf2onnx.convert \
+# --saved-model ./inference_savedmodel/desc_only --output onnx_models/model_desc_only.onnx \
+# --load_op_libraries ./tf_ops/grouping/tf_grouping_so.so,./tf_ops/sampling/tf_sampling_so.so \
+# --rename-outputs keypoints,features \
+# --custom-ops QueryBallPoint,GroupPoint --opset ${ONNX_OPSET} --target tensorrt

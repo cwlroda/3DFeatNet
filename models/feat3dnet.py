@@ -131,9 +131,7 @@ class Feat3dNet(tf.keras.Model):
         - end_points
         '''
 
-        # 
         pointcloud = inputs['pointcloud']
-        bypass = inputs['bypass']
         keypoints = inputs['keypoints']
 
         # self.logger.debug("Tracing the function with input types:")
@@ -147,8 +145,16 @@ class Feat3dNet(tf.keras.Model):
         l0_xyz = pointcloud[:,:,:3] # Slice pointcloud to take the x,y,z dims
         l0_points = None    # Normal information not used in 3DFeat-Net
 
-        # Compute Sampling and Grouping Ops
-        new_xyz = sample_points(l0_xyz, self._num_clusters)
+        # Checking for Detection Bypass
+        if self.train_or_infer==False or training==False:
+            new_xyz = keypoints
+            # use_orientation = False
+            # attention = tf.multiply(attention, 0.0)
+            # orientation = tf.multiply(orientation, 0.0)
+        else:
+            # Compute Sampling and Grouping Ops
+            new_xyz = sample_points(l0_xyz, self._num_clusters)
+        
         new_points, idx = query_and_group_points(l0_xyz, l0_points, new_xyz,
                             self._num_samples, self._radius, 
                             knn=False, use_xyz=False, use_orientations=False, 
@@ -181,13 +187,6 @@ class Feat3dNet(tf.keras.Model):
         if self._Attention==False:
             # Set attention==0 (so that a Tensor is always returned)
             attention = tf.multiply(attention, 0.0)
-
-        # Checking for Detection Bypass
-        if bypass==True:
-            new_xyz = keypoints
-            use_orientation = False
-            attention = tf.multiply(attention, 0.0)
-            orientation = tf.multiply(orientation, 0.0)
 
         # update end_points
         if self.train_or_infer:
@@ -230,7 +229,7 @@ class Feat3dNet(tf.keras.Model):
         else:
             return new_xyz, new_points, attention, {}
 
-
+"""
 class Feat3dNet_Describe(tf.keras.Model):
     '''
     Implements only the Feature Description aspect of `3DFeatNet`.
@@ -267,6 +266,36 @@ class Feat3dNet_Describe(tf.keras.Model):
 
         # Required parameter for constructing ext_layers
         _final_relu = False
+
+        # Construct Detection MLP Layers
+        mlp = [64, 128, 256]
+        mlp2 = [128, 64]
+        self.logger.info('Detection MLP sizes: {} | {} '.format(mlp, mlp2))
+
+        self.det_layers = []
+        for i, num_out_channel in enumerate(mlp):
+            self.det_layers.append(
+                Conv2D_BN(num_out_channel, [1,1], bn=True, padding='valid', 
+                            name="detection_conv_%d" %i)
+            )
+        self.det_layers.append( MaxPoolAxis(name="det_MaxPoolAxis") ) # Custom layer pooling only on one axis then tiling then concat
+        if mlp2 is not None:
+            for i, num_out_channel in enumerate(mlp2):
+                self.det_layers.append(
+                    Conv2D_BN(num_out_channel, [1,1], bn=True, padding='valid', 
+                                name="detection_conv_post_%d" %i)
+                )
+
+        self.Attention = tf.keras.layers.Conv2D(1, kernel_size=[1,1], strides=[1,1], 
+                                                padding='valid', activation='softplus', 
+                                                name="detection_attention"
+                                               )
+
+        self.Orientation = tf.keras.layers.Conv2D(2, kernel_size=[1,1], strides=[1,1], 
+                                                    padding='valid',
+                                                    name='detection_orientation', 
+                                                    activation=None 
+                                                )
 
         # Construct Description MLP Layers
         mlp = [32, 64]
@@ -333,6 +362,35 @@ class Feat3dNet_Describe(tf.keras.Model):
         l0_xyz = pointcloud[:,:,:3] # Slice pointcloud to take the x,y,z dims
         l0_points = None    # Normal information not used in 3DFeat-Net
 
+        new_xyz = sample_points(l0_xyz, self._num_clusters)
+        new_points, idx = query_and_group_points(l0_xyz, l0_points, new_xyz,
+                            self._num_samples, self._radius, 
+                            knn=False, use_xyz=False, use_orientations=False, 
+                            use_points=False, normalize_radius=True, orientations=None)
+
+        # Compute Conv2d_BN --> MaxPoolAxis --> Conv2d_BN
+        for layer in self.det_layers:
+            new_points = layer(new_points, False)
+            # self.logger.debug("Layer: {}".format(layer.name))
+            # self.logger.debug("new_points has shape: {}".format(new_points.shape))
+
+        # Compute Attention
+        attention = self.Attention(new_points)
+        attention = tf.squeeze(attention, axis=[2,3], name="attention_squeeze")
+        # self.logger.debug("attention has shape: {}".format(attention.shape))
+
+        # Compute Orientation
+        orientation_xy = self.Orientation(new_points)
+        orientation_xy = tf.squeeze(orientation_xy, axis=2, 
+            name="orientation_squeeze")
+        orientation_xy = tf.nn.l2_normalize(orientation_xy, axis=2, epsilon=1e-8, 
+            name="orientation_l2_norm")
+        orientation = tf.atan2(orientation_xy[:, :, 1], orientation_xy[:, :, 0], 
+            name="orientation_atan2")
+        # self.logger.debug("orientation has shape: {}".format(orientation.shape))
+
+        new_xyz = keypoints
+
         # Attention and Orientation are bypossed
         orientation = tf.zeros([num_clouds, num_points], tf.float32)
         new_xyz = keypoints
@@ -343,7 +401,7 @@ class Feat3dNet_Describe(tf.keras.Model):
                     use_xyz=False, use_keypoints=True, use_tnet=False, use_points=False,
                     tnet_spec=None, knn=False, 
                     keypoints=new_xyz, orientations=None,
-                    rotate_orientation=False,
+                    rotate_orientation=True,
                     normalize_radius=True)
 
         # Compute Conv2d_BN --> MaxPoolConcat --> Conv2d_BN --> MaxPoolAxis --> Conv2d_BN
@@ -356,6 +414,7 @@ class Feat3dNet_Describe(tf.keras.Model):
         new_points = tf.nn.l2_normalize(new_points, axis=2, epsilon=1e-8, name="features_l2_norm")
 
         return new_xyz, new_points
+"""
 
 class AttentionWeightedAlignmentLoss(tf.keras.losses.Loss):
     '''

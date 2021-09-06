@@ -95,7 +95,7 @@ def compute_descriptors():
 
     # Get both Full model and Descriptor model
     model = Feat3dNet(False, param=param)
-    model_describe = Feat3dNet_Describe(param=param)
+    # model_describe = Feat3dNet_Describe(param=param)
 
     # init model 1
     logger.info("Trying to find a checkpoint in {}".format(args.checkpoint))
@@ -108,13 +108,13 @@ def compute_descriptors():
         logger.info('Unable to find a latest checkpoint in {}'.format(args.checkpoint))
         exit(1)
 
-    logger.info("Attempting to restore weights for 3DFeatNet Describe only")
-    for layer in model_describe.layers:
-        # logger.debug("Restoring layer: {}".format(layer.name))
-        layer_rest = model.get_layer(name=layer.name)
-        layer.set_weights(layer_rest.get_weights())
+    # logger.info("Attempting to restore weights for 3DFeatNet Describe only")
+    # for layer in model_describe.layers:
+    #     # logger.debug("Restoring layer: {}".format(layer.name))
+    #     layer_rest = model.get_layer(name=layer.name)
+    #     layer.set_weights(layer_rest.get_weights())
     
-    logger.info('Restored weights from {}.'.format(model_find))
+    # logger.info('Restored weights from {}.'.format(model_find))
 
     num_processed = 0
     inference_iterations = len(binFiles)
@@ -141,25 +141,27 @@ def compute_descriptors():
             # Detect features
 
             # Compute attention in batches due to limited memory
-            xyz, attention = [], []
+            xyz, features, attention = [], [], []
             for startPt in range(0, pointcloud.shape[0], MAX_POINTS):
                 endPt = min(pointcloud.shape[0], startPt + MAX_POINTS)
                 xyz_subset = pointclouds[:, startPt:endPt, :3]
 
                 logger.debug("#### Calling model with bypass=False")
                 # Compute attention over all points
-                xyz_cur, keypoints_cur, attention_cur, end_points_cur = \
+                xyz_cur, features_cur, attention_cur, end_points_cur = \
                     model({
                         'pointcloud': pointclouds,
-                        'bypass': False,
-                        'keypoints': None}, training=False)
+                        'keypoints': pointclouds[:,:,:3]}, training=False)
 
                 xyz.append(xyz_cur)
+                features.append(features_cur)
                 attention.append(attention_cur)
 
             xyz = np.concatenate(xyz, axis=1)
+            features = np.concatenate(features, axis=1)
             attention = np.concatenate(attention, axis=1)
-            logger.debug("keypoint shape: {}".format(xyz.shape))
+            logger.debug("keypoints shape: {}".format(xyz.shape))
+            logger.debug("features shape: {}".format(features.shape))
             logger.debug("attention shape: {}".format(attention.shape))
 
             # Uncomment to save out attention to file
@@ -196,9 +198,15 @@ def compute_descriptors():
         # Compute features
         logger.debug("#### Calling model with bypass=True")
         logger.debug("XYZ_nms shape: {}".format(xyz_nms.shape))
-        xyz, features = model_describe(
-            {'pointcloud': pointclouds, 'keypoints': xyz_nms}
+        # xyz, features = model_describe(
+        #     {'pointcloud': pointclouds, 'keypoints': xyz_nms}
+        # )
+
+        xyz, features, attention, _ = model(
+            {'pointcloud': pointclouds, 'keypoints': xyz_nms},
+            training=False
         )
+
 
         logger.debug("Bypass keypoint shape: {}".format(xyz.shape))
         logger.debug("Bypass features shape: {}".format(features.shape))
@@ -236,8 +244,8 @@ def compute_descriptors():
     describe_only_savepath = os.path.join(model_savepath, 'desc_only')
     model.save(detect_describe_savepath)
     logger.info("Saved 'Detect+Describe' model in {}".format(detect_describe_savepath))   
-    model_describe.save(describe_only_savepath)
-    logger.info("Saved 'Describe Only' model in {}".format(describe_only_savepath))
+    # model_describe.save(describe_only_savepath)
+    # logger.info("Saved 'Describe Only' model in {}".format(describe_only_savepath))
     # save models after everything is done
 
 def log_arguments():
@@ -287,10 +295,11 @@ def nms(xyz, attention):
 if __name__ == '__main__':
 
     # config = tf.ConfigProto() 
-    # config.allow_soft_placement = True    
-    # config.gpu_options.allow_growth = True    
-    os.environ["CUDA_VISIBLE_DEVICES"] = str(args.gpu)
-    gpu_string = '/gpu:{}'.format(args.gpu)
+    # config.allow_soft_placement = True
+    # config.gpu_options.allow_growth = True
 
-    with tf.device(gpu_string):
+    gpus = tf.config.list_physical_devices('GPU')
+    # tf.config.set_visible_devices(gpus[ int(args.gpu) ], 'GPU')
+
+    with tf.device('/gpu:' + str(args.gpu)):
         compute_descriptors()
