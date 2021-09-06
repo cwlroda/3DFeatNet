@@ -29,13 +29,13 @@ set_ifndef(NVINFER_LIB ${_NVINFER_LIB})
 
 # Add include directories
 include_directories(
-  ${CUDA_INC_DIR} ${TRT_INCLUDE} ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/..
+  ${CUDA_INC_DIR} ${TRT_INCLUDE} ${CMAKE_SOURCE_DIR}   ${CMAKE_SOURCE_DIR}/../..
 )
 
 # Define clip plugin library target.
 add_library(PointNetGroupingOps MODULE
-  ${CMAKE_SOURCE_DIR}/../noisy_assert.h
-  ${CMAKE_SOURCE_DIR}/../../tf_ops/grouping/tf_grouping_g.cu
+  ${CMAKE_SOURCE_DIR}/../../noisy_assert.h
+  ${CMAKE_SOURCE_DIR}/../../../tf_ops/grouping/tf_grouping_g.cu
   ${CMAKE_SOURCE_DIR}/op_query_ball_point_plugin.cpp
   ${CMAKE_SOURCE_DIR}/op_group_point_plugin.cpp
   ${CMAKE_SOURCE_DIR}/grouping_kernel.h

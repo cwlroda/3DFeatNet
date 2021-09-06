@@ -156,8 +156,7 @@ Inputs:
 void GroupPointPlugin::attachToContext 
         (cudnnContext *, cublasContext *, IGpuAllocator *) noexcept{
     // not sure how to use this...
-    // TODO get rid of this when safe
-    printf("### Called GroupPointPlugin::attachToContext ###\n");
+    dprintf(DEBUG_STATE, "### Called GroupPointPlugin::attachToContext ###\n");
 }
 
 /*
@@ -169,8 +168,7 @@ If the plugin owns per-context resource, it can be released here.
 */
 void GroupPointPlugin::detachFromContext () noexcept{
     // not sure how to use this...
-    // TODO get rid of this when safe
-    printf("### Called GroupPointPlugin::detachFromContext ###\n");
+    dprintf(DEBUG_STATE, "### Called GroupPointPlugin::detachFromContext ###\n");
 }
 
 // ~ Overriding IPluginV2DynamicExt's virtual functions
@@ -283,8 +281,7 @@ Used to configure any plugins required by this given plugin (none in this case)
 void GroupPointPlugin::configurePlugin 
         (const DynamicPluginTensorDesc *in, int32_t nbInputs,
         const DynamicPluginTensorDesc *out, int32_t nbOutputs) noexcept{
-    // TODO: Get rid of this when figured out safe.
-    printf("### Called GroupPointPlugin::configurePlugin ###\n");
+    dprintf(DEBUG_STATE, "### Called GroupPointPlugin::configurePlugin ###\n");
 }
 
 /*

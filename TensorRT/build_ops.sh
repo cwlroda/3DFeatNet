@@ -2,6 +2,10 @@
 
 # Builds the custom ops in the TensorRT subfolder.
 # This is meant to be called from the 3DFeatNet base directory.
+set +e
+rm -r TensorRT/ops/grouping/build
+rm -r TensorRT/ops/sign/build
+
 set -e
 
 cd TensorRT/ops/grouping

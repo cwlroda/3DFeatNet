@@ -187,8 +187,7 @@ Inputs:
 void QueryBallPointPlugin::attachToContext 
         (cudnnContext *, cublasContext *, IGpuAllocator *) noexcept{
     // not sure how to use this...
-    // TODO get rid of this when safe
-    printf("### Called QueryBallPointPlugin::attachToContext ###\n");
+    dprintf(DEBUG_STATE, "### Called QueryBallPointPlugin::attachToContext ###\n");
 }
 
 /*
@@ -200,8 +199,7 @@ If the plugin owns per-context resource, it can be released here.
 */
 void QueryBallPointPlugin::detachFromContext () noexcept{
     // not sure how to use this...
-    // TODO get rid of this when safe
-    printf("### Called QueryBallPointPlugin::detachFromContext ###\n");
+    dprintf(DEBUG_STATE, "### Called QueryBallPointPlugin::detachFromContext ###\n");
 }
 
 // ~ Overriding IPluginV2DynamicExt's virtual functions
@@ -300,8 +298,7 @@ Used to configure any plugins required by this given plugin (none in this case)
 void QueryBallPointPlugin::configurePlugin 
         (const DynamicPluginTensorDesc *in, int32_t nbInputs,
         const DynamicPluginTensorDesc *out, int32_t nbOutputs) noexcept{
-    // TODO: Get rid of this when figured out safe.
-    printf("### Called QueryBallPointPlugin::configurePlugin ###\n");
+    dprintf(DEBUG_STATE, "### Called QueryBallPointPlugin::configurePlugin ###\n");
 }
 
 /*
