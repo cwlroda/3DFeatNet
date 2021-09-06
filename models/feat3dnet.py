@@ -182,23 +182,26 @@ class Feat3dNet(tf.keras.Model):
             # Set attention==0 (so that a Tensor is always returned)
             attention = tf.multiply(attention, 0.0)
 
+        # Checking for Detection Bypass
+        if bypass==True:
+            new_xyz = keypoints
+            use_orientation = False
+            attention = tf.multiply(attention, 0.0)
+            orientation = tf.multiply(orientation, 0.0)
+
         # update end_points
         if self.train_or_infer:
             self.end_points['keypoints'] = new_xyz
             self.end_points['attention'] = attention
             self.end_points['orientation'] = orientation
 
-        if bypass==True:
-            new_points = keypoints
-            use_orientation = False
-
         new_xyz, new_points, idx, grouped_xyz, end_points_tmp = \
         sample_and_group(npoint=512, radius=self._radius, nsample=self._num_samples, 
                     xyz=l0_xyz, points=l0_points, 
                     use_xyz=False, use_keypoints=True, use_tnet=False, use_points=False,
                     tnet_spec=None, knn=False, 
-                    keypoints=new_xyz, orientations=orientation,
                     rotate_orientation=use_orientation,
+                    keypoints=new_xyz, orientations=orientation,
                     normalize_radius=True)
 
         if self.train_or_infer:

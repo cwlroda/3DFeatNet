@@ -112,7 +112,8 @@ def sample_and_group(npoint, radius, nsample, xyz, points, tnet_spec=None, knn=F
     end_points['grouped_xyz_before'] = grouped_xyz
 
     # 2D-rotate via orientations if necessary
-    if rotate_orientation == True:
+    if rotate_orientation == True and orientations is not None:
+        # print(">>>> Rotate_Orientation: True")
         cosval = tf.cos(orientations)
         sinval = tf.sin(orientations)
         one = tf.ones_like(cosval)
@@ -124,6 +125,7 @@ def sample_and_group(npoint, radius, nsample, xyz, points, tnet_spec=None, knn=F
         # print(">>> R's shape:", R.shape)
         end_points['rotation'] = R
     else:
+        # print(">>>> Rotate_Orientation: False")
         end_points['rotation'] = 0.0
 
     if use_tnet == True:

@@ -142,7 +142,7 @@ def train(gpu_list):
     model( {
         'pointcloud': rand_input,
         'bypass': False,
-        'keypoints': None
+        'keypoints': tf.zeros(rand_input.shape, tf.float32)
     }, True)
 
     # Extract initialised weights out of the model, for restoration later.
@@ -242,7 +242,7 @@ def train(gpu_list):
                     # Run forward pass
                     _1, features, att, end_points = model({
                         'pointcloud': point_cloud,
-                        'bypass': False, 'keypoints': None
+                        'bypass': False, 'keypoints': tf.zeros(point_cloud.shape, tf.float32)
                         }, training=True)
 
                     loss_val = loss_fn(att, features)
