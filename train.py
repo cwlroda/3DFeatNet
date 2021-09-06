@@ -135,7 +135,6 @@ def train(gpu_list):
     # with mirrored_strat.scope():
 
     model = Feat3dNet(True, param=param)
-    model_describe = Feat3dNet_Describe(param=param)    # purely for validation
 
     # Need to put in a dummy input to initialize the model.
     rand_input = tf.concat([tf.random.normal([BATCH_SIZE, args.num_points, args.data_dim])]*3, axis=0)

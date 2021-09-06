@@ -1,7 +1,6 @@
-from models import feat3dnet, feat3dnet_tf2
+from models import feat3dnet
 
 networks_map = {'3DFeatNet': feat3dnet.Feat3dNet,
-                '3DFeatNet_tf2': feat3dnet_tf2.Feat3dNet
                 }
 
 

@@ -95,7 +95,6 @@ def compute_descriptors():
 
     # Get both Full model and Descriptor model
     model = Feat3dNet(False, param=param)
-    # model_describe = Feat3dNet_Describe(param=param)
 
     # init model 1
     logger.info("Trying to find a checkpoint in {}".format(args.checkpoint))
@@ -107,14 +106,6 @@ def compute_descriptors():
     else:
         logger.info('Unable to find a latest checkpoint in {}'.format(args.checkpoint))
         exit(1)
-
-    # logger.info("Attempting to restore weights for 3DFeatNet Describe only")
-    # for layer in model_describe.layers:
-    #     # logger.debug("Restoring layer: {}".format(layer.name))
-    #     layer_rest = model.get_layer(name=layer.name)
-    #     layer.set_weights(layer_rest.get_weights())
-    
-    # logger.info('Restored weights from {}.'.format(model_find))
 
     num_processed = 0
     inference_iterations = len(binFiles)
@@ -198,9 +189,6 @@ def compute_descriptors():
         # Compute features
         logger.debug("#### Calling model with bypass=True")
         logger.debug("XYZ_nms shape: {}".format(xyz_nms.shape))
-        # xyz, features = model_describe(
-        #     {'pointcloud': pointclouds, 'keypoints': xyz_nms}
-        # )
 
         xyz, features, attention, _ = model(
             {'pointcloud': pointclouds, 'keypoints': xyz_nms},
@@ -244,9 +232,6 @@ def compute_descriptors():
     describe_only_savepath = os.path.join(model_savepath, 'desc_only')
     model.save(detect_describe_savepath)
     logger.info("Saved 'Detect+Describe' model in {}".format(detect_describe_savepath))   
-    # model_describe.save(describe_only_savepath)
-    # logger.info("Saved 'Describe Only' model in {}".format(describe_only_savepath))
-    # save models after everything is done
 
 def log_arguments():
     s = '\n'.join(['    {}: {}'.format(arg, getattr(args, arg)) for arg in vars(args)])

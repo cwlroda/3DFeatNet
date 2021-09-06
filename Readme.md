@@ -1,4 +1,4 @@
-# 3DFeat-Net: Weakly Supervised Local 3D Features for Point Cloud Registration -- TensorFlow 2 Implementation
+# 3DFeat-Net: Weakly Supervised Local 3D Features for Point Cloud Registration: TensorFlow 2 Implementation
 
 ![pic-network](docs/pic-network.png)
 
@@ -6,7 +6,7 @@
 
 This work is based on our ECCV2018 paper. 3DFeat-Net is an approach for learning features for point cloud geometric registration under weak-supervision, where the supervision is given in terms of whether 2 point clouds have very high overlap or low (or no) overlap. For details, please read our paper which can be found on [arXiv](https://arxiv.org/abs/1807.09413).
 
-This particular branch is a fork of 3DFeatNet, converted to run in TensorFlow 2.x, with instructions on how to convert the resultant SavedModel into a TensorRT engine via an ONNX intermediate.
+This is a fork of 3DFeatNet, converted to run in TensorFlow 2.x, with instructions on how to convert the resultant SavedModel into a TensorRT engine via an ONNX intermediate.
 
 Bibtex:
 
@@ -21,7 +21,7 @@ Bibtex:
 
 ## Environment
 
-This version of the code is developed and tested on the following environment:
+This version of the code is developed and tested in the following environment:
 
 * Python **3.7.11**
 * Tensorflow **2.5**
@@ -30,7 +30,9 @@ This version of the code is developed and tested on the following environment:
 
 We also use MATLAB scripts for evaluation and processing of data.
 
-To install, create a new `conda` environment in **Python 3.7**, and install the `requirements_tf2.txt` using **pip**. Attempting to install via `conda` will not work, for some reason.
+## Setup
+
+To begin, create a new `conda` environment in **Python 3.7**, and install the `requirements_tf2.txt` using **pip**. Attempting to install via `conda` will not work, for some reason.
 
 ## Network
 
@@ -40,7 +42,7 @@ The network model is in `models/feat3dnet.py`.
 
 Before using the model, you first need to compile the customized tf_ops in the folder `tf_ops` (we use the customized grouping and sampling ops from [PointNet++](https://github.com/charlesq34/pointnet2)).
 
-`cd` to `tf_ops` and run `bash tf_ops_compile.sh`. If `nvcc` is not added to path, so do first. If errors are thrown, or the displayed `CUDA` version is wrong, look into the `tf_ops_compile.sh` file and set the `NVCC_VER` variable to the desired version.
+`cd` to `tf_ops` and run `bash tf_ops_compile.sh`. If `nvcc` is not added to path, so do first. If errors are thrown, or the displayed `CUDA` version is wrong, look into the `tf_ops_compile.sh` file and set the `NVCC_VER` variable to the correct version on your machine.
 
 ### Training
 
@@ -135,7 +137,7 @@ trtexec --onnx=./onnx_models/model_det_desc.onnx \
 --saveEngine=./TensorRT/model_det_desc.lib
 ```
 
-If successful, it registers the inference engines in `./TensorRT/` as `model_det_desc.lib` and `model_desc_only.lib`. You can validate the model building by running it with random-valued data:
+If successful, it registers the inference engine in `./TensorRT/` as `model_det_desc.lib`. You can validate the model building by running it with random-valued data:
 ```bash
 trtexec --shapes=in_pointcloud:1x16384x6,in_keypoints:1x16384x3 \
 --loadEngine=./TensorRT/model_det_desc.lib \
