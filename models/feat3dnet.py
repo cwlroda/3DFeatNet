@@ -234,10 +234,9 @@ class Feat3dNet(tf.keras.Model):
             self.end_points['output_xyz'] = new_xyz
             self.end_points['output_features'] = new_points
             
-            if training == True:
-                new_xyz = tf.split(new_xyz, 3, axis=0)
-                new_points = tf.split(new_points, 3, axis=0)
-                attention = tf.split(attention, 3, axis=0)[0]
+            new_xyz = tf.split(new_xyz, 3, axis=0)
+            new_points = tf.split(new_points, 3, axis=0)
+            attention = tf.split(attention, 3, axis=0)[0]
 
             return new_xyz, new_points, attention, self.end_points
         else:

@@ -130,7 +130,6 @@ This builds the grouping ops `QueryBallPoint` and `GroupPoint`, and puts their `
 
 Navigate to the 3DFeatNet repo in the container workspace and run the following:
 ```bash
-set -e
 trtexec --onnx=./onnx_models/model_det_desc.onnx \
 --plugins=./TensorRT/ops/grouping/build/libPointNetGroupingOps.so \
 --plugins=./TensorRT/ops/sign/build/libSignOps.so \
