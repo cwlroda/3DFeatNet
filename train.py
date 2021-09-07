@@ -141,7 +141,7 @@ def train(gpu_list):
     model( {
         'pointcloud': rand_input,
         'keypoints': rand_input[:,:,:3]
-    }, training=True)
+    })
 
     # Extract initialised weights out of the model, for restoration later.
     raw_weights = {}
@@ -248,7 +248,7 @@ def train(gpu_list):
                     _1, features, att, end_points = model({
                         'pointcloud': point_cloud,
                         'keypoints': point_cloud[:,:,:3]
-                        }, training=True)
+                        })
 
                     loss_val = loss_fn(att, features)
 
@@ -347,9 +347,9 @@ def validate(model, val_folder, val_groundtruths, data_dim):
 
 
         inputs = {'pointcloud': clouds1, 'keypoints': offsets}
-        xyz1, features1, _, _ = model(inputs, training=False)
+        xyz1, features1, _, _ = model(inputs)
         inputs = {'pointcloud': clouds2, 'keypoints': offsets}
-        xyz2, features2, _, _ = model(inputs, training=False)
+        xyz2, features2, _, _ = model(inputs)
 
         d = np.sqrt(np.sum(np.square(np.squeeze(features1 - features2)), axis=1))
         d = d[:num_clusters]

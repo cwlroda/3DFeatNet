@@ -10,6 +10,7 @@ import logging
 import logging.config
 import numpy as np
 import os
+import time
 from sklearn.neighbors import NearestNeighbors
 import tensorflow as tf
 from tensorflow.python.keras.backend import dtype
@@ -24,7 +25,7 @@ from utils import get_tensors_in_checkpoint_file
 # Defaults
 CKPT_PATH = './ckpt/'
 MAX_POINTS = 30000
-IS_TRAINING = tf.constant(False, dtype=tf.bool)
+TEST_NUM = 750
 
 # Arguments
 parser = argparse.ArgumentParser(description='Trains pointnet')
@@ -96,6 +97,9 @@ def compute_descriptors():
     # Get both Full model and Descriptor model
     model = Feat3dNet(False, param=param)
 
+    # disable eager mode?
+    # tf.config.run_functions_eagerly(False)
+
     # init model 1
     logger.info("Trying to find a checkpoint in {}".format(args.checkpoint))
     model_find = tf.train.latest_checkpoint(args.checkpoint)
@@ -107,8 +111,11 @@ def compute_descriptors():
         logger.info('Unable to find a latest checkpoint in {}'.format(args.checkpoint))
         exit(1)
 
+    time_avg_bypass_true = 0
+    time_avg_bypass_false = 0
+
     num_processed = 0
-    inference_iterations = len(binFiles)
+    inference_iterations = min(TEST_NUM, len(binFiles))
 
     for iBin in range(0, inference_iterations):
         binFile = binFiles[iBin]
@@ -130,7 +137,7 @@ def compute_descriptors():
 
         if args.use_keypoints_from is None:
             # Detect features
-
+            t_call = 0
             # Compute attention in batches due to limited memory
             xyz, features, attention = [], [], []
             for startPt in range(0, pointcloud.shape[0], MAX_POINTS):
@@ -138,11 +145,16 @@ def compute_descriptors():
                 xyz_subset = pointclouds[:, startPt:endPt, :3]
 
                 logger.debug("#### Calling model with bypass=False")
+                # logger.debug("Input pointclouds shape: {}".format(pointclouds.shape))
+                # logger.debug("Input keypoints shape: {}".format(xyz_subset.shape))
                 # Compute attention over all points
-                xyz_cur, features_cur, attention_cur, end_points_cur = \
-                    model({
-                        'pointcloud': pointclouds,
-                        'keypoints': pointclouds[:,:,:3]}, training=False)
+                t1 = time.perf_counter()
+                xyz_cur, features_cur, attention_cur, _ = \
+                    model(
+                        {'pointcloud': pointclouds, 'keypoints': xyz_subset}
+                    )
+                t2 = time.perf_counter()
+                t_call += (t2-t1)
 
                 xyz.append(xyz_cur)
                 features.append(features_cur)
@@ -151,9 +163,12 @@ def compute_descriptors():
             xyz = np.concatenate(xyz, axis=1)
             features = np.concatenate(features, axis=1)
             attention = np.concatenate(attention, axis=1)
-            logger.debug("keypoints shape: {}".format(xyz.shape))
-            logger.debug("features shape: {}".format(features.shape))
-            logger.debug("attention shape: {}".format(attention.shape))
+            # logger.debug("keypoints shape: {}".format(xyz.shape))
+            # logger.debug("features shape: {}".format(features.shape))
+            # logger.debug("attention shape: {}".format(attention.shape))
+
+            logger.debug("Took {:0.4f}s to call one cycle of inference".format(t_call))
+            time_avg_bypass_false += t_call
 
             # Uncomment to save out attention to file
             '''
@@ -188,17 +203,22 @@ def compute_descriptors():
 
         # Compute features
         logger.debug("#### Calling model with bypass=True")
-        logger.debug("XYZ_nms shape: {}".format(xyz_nms.shape))
+        # logger.debug("Input pointclouds shape: {}".format(pointclouds.shape))
+        # logger.debug("Input XYZ_nms shape: {}".format(xyz_nms.shape))
 
+        t1 = time.perf_counter()
         xyz, features, attention, _ = model(
-            {'pointcloud': pointclouds, 'keypoints': xyz_nms},
-            training=False
+            {'pointcloud': pointclouds, 'keypoints': xyz_nms}
         )
+        t2 = time.perf_counter()
 
+        # logger.debug("Bypass keypoint shape: {}".format(xyz.shape))
+        # logger.debug("Bypass features shape: {}".format(features.shape))
+        # logger.debug("Bypass attention shape: {}".format(attention.shape))
+        logger.debug("Took {:0.4f}s to call one cycle of inference".format(t2-t1))
 
-        logger.debug("Bypass keypoint shape: {}".format(xyz.shape))
-        logger.debug("Bypass features shape: {}".format(features.shape))
-        logger.debug("Bypass attention shape: {}".format(attention.shape))
+        time_avg_bypass_true += (t2-t1)
+
         # xyz, features = \
         #     sess.run([xyz_op, features_op],
         #                 feed_dict={cloud_pl: pointclouds, is_training: False, end_points['keypoints']: xyz_nms})
@@ -213,7 +233,7 @@ def compute_descriptors():
         #     model.summary(line_length=90, print_fn=logger.info)
             
         num_processed += 1
-        logger.info('Processed %i / %i images', num_processed, len(binFiles))
+        logger.info('Processed %i / %i images', num_processed, inference_iterations)
 
         # # Doesn't yet work. Supposed to write graph to summary filewriter.
         # tb_callback = tf.keras.callbacks.TensorBoard(model_savepath)
@@ -226,6 +246,13 @@ def compute_descriptors():
         #     writer.flush()
         # logger.info("Saved model representation/graph to TensorBoard.")
         # assert 0
+
+    time_avg_bypass_false /= inference_iterations
+    time_avg_bypass_true /= inference_iterations
+
+    logger.info("Took an average of {:0.4f}s for bypass:True, and {:0.4f}s for bypass:False over {} iterations.".format(
+        time_avg_bypass_true, time_avg_bypass_false, inference_iterations
+    ))
 
     logger.info("Saving inference model...")
     detect_describe_savepath = os.path.join(model_savepath, 'det_desc')
@@ -248,7 +275,7 @@ def nms(xyz, attention):
 
     for i in range(num_models):
 
-        nbrs = NearestNeighbors(n_neighbors=50, algorithm='ball_tree').fit(xyz[i, :, :])
+        nbrs = NearestNeighbors(n_neighbors=25, algorithm='ball_tree').fit(xyz[i, :, :])
         distances, indices = nbrs.kneighbors(xyz[i, :, :])
 
         knn_attention = attention[i, indices]
@@ -262,7 +289,7 @@ def nms(xyz, attention):
         is_max_attention = sorted(is_max_attention, reverse=True)
         max_indices = [m[1] for m in is_max_attention]
 
-        logger.debug("max_indices length: {}".format(len(max_indices)))
+        # logger.debug("max_indices length: {}".format(len(max_indices)))
 
         if len(max_indices) >= args.max_keypoints:
             max_indices = max_indices[:args.max_keypoints]

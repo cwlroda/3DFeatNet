@@ -112,8 +112,14 @@ class Feat3dNet(tf.keras.Model):
                             activation='relu' if (_final_relu or i<len(mlp3) - 1) else None)
                 )
 
-    @tf.function
-    def call(self, inputs, training=False):
+    # Running in tf.function mode means 'training' as a bool is not supported
+    # Until this issue https://github.com/tensorflow/serving/issues/1670
+    # is resolved, just run eagerly.
+    @tf.function (input_signature=[
+        {"pointcloud": tf.TensorSpec([1, None, 6], dtype=tf.float32, name="pc"),
+        "keypoints": tf.TensorSpec([1, None, 3], dtype=tf.float32, name="kp")}
+    ])
+    def call(self, inputs):
         '''
         ### Forward pass of network.
 
@@ -122,7 +128,7 @@ class Feat3dNet(tf.keras.Model):
             (batch_size, ndataset, 3)
         - "bypass" (bool): Whether to bypass detection (in TF)
         - keypoints (tf.Tensor): What to subt into new_points if bypass is True
-        - training(bool): indicates training or inference on layers called.
+        - training(tf.bool): indicates training or inference on layers called.
 
         #### Outputs:
         - keypoints
@@ -134,10 +140,10 @@ class Feat3dNet(tf.keras.Model):
         pointcloud = inputs['pointcloud']
         keypoints = inputs['keypoints']
 
-        # self.logger.debug("Tracing the function with input types:")
+        # self.logger.debug("Tracing the function")
         # self.logger.debug("pointcloud: Type: {}, Shape: {}".format(type(pointcloud), pointcloud.shape))
-        # self.logger.debug("bypass: Type: {}, Shape: {}".format(type(bypass), bypass.shape))
         # self.logger.debug("keypoints: Type: {}, Shape: {}".format(type(keypoints), keypoints.shape))
+        # self.logger.debug("training: Type: {}, Shape: {}".format(type(training), training.shape))
 
         if self.train_or_infer:
             self.end_points['input_pointclouds'] = pointcloud
@@ -146,7 +152,7 @@ class Feat3dNet(tf.keras.Model):
         l0_points = None    # Normal information not used in 3DFeat-Net
 
         # Checking for Detection Bypass
-        if self.train_or_infer==False or training==False:
+        if self.train_or_infer==False:
             new_xyz = keypoints
             # use_orientation = False
             # attention = tf.multiply(attention, 0.0)
@@ -160,19 +166,23 @@ class Feat3dNet(tf.keras.Model):
                             knn=False, use_xyz=False, use_orientations=False, 
                             use_points=False, normalize_radius=True, orientations=None)
 
+        # tf.print("new_points aft query_and_group", new_points[:,:3,:3])
+
         # Compute Conv2d_BN --> MaxPoolAxis --> Conv2d_BN
         for layer in self.det_layers:
-            new_points = layer(new_points, training)
+            new_points = layer(new_points, self.train_or_infer)
             # self.logger.debug("Layer: {}".format(layer.name))
             # self.logger.debug("new_points has shape: {}".format(new_points.shape))
+            # tf.print("new_points aft layer detection/", layer.name, new_points[:,:3,:3])
 
         # Compute Attention
-        attention = self.Attention(new_points)
+        attention = self.Attention(new_points, training=self.train_or_infer)
         attention = tf.squeeze(attention, axis=[2,3], name="attention_squeeze")
         # self.logger.debug("attention has shape: {}".format(attention.shape))
+        # tf.print("attention: ", attention)
 
         # Compute Orientation
-        orientation_xy = self.Orientation(new_points)
+        orientation_xy = self.Orientation(new_points, training=self.train_or_infer)
         orientation_xy = tf.squeeze(orientation_xy, axis=2, 
             name="orientation_squeeze")
         orientation_xy = tf.nn.l2_normalize(orientation_xy, axis=2, epsilon=1e-8, 
@@ -180,11 +190,13 @@ class Feat3dNet(tf.keras.Model):
         orientation = tf.atan2(orientation_xy[:, :, 1], orientation_xy[:, :, 0], 
             name="orientation_atan2")
         # self.logger.debug("orientation has shape: {}".format(orientation.shape))
+        # tf.print("orientation: ", orientation)
 
         # During training, the output of the detector is bypassed.
         use_orientation = not(self._NoRegress)
 
         if self._Attention==False:
+            # print("attention False")
             # Set attention==0 (so that a Tensor is always returned)
             attention = tf.multiply(attention, 0.0)
 
@@ -202,15 +214,17 @@ class Feat3dNet(tf.keras.Model):
                     rotate_orientation=use_orientation,
                     keypoints=new_xyz, orientations=orientation,
                     normalize_radius=True)
+        # tf.print("new kps after sample_and_grp", new_xyz)
 
         if self.train_or_infer:
             self.end_points.update(end_points_tmp)
 
         # Compute Conv2d_BN --> MaxPoolConcat --> Conv2d_BN --> MaxPoolAxis --> Conv2d_BN
         for layer in self.ext_layers:
-            new_points = layer(new_points, training)
+            new_points = layer(new_points, self.train_or_infer)
             # self.logger.debug("Layer: {}".format(layer.name))
             # self.logger.debug("new_points has shape: {}".format(new_points.shape))
+            # tf.print("new_points aft layer description/", layer.name, new_points[:,:3,:3])
 
         new_points = tf.squeeze(new_points, [2], name="features_squeeze")
         new_points = tf.nn.l2_normalize(new_points, axis=2, epsilon=1e-8, name="features_l2_norm")
