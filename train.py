@@ -149,8 +149,15 @@ def train(gpu_list):
         raw_weights[layer.name] = layer.get_weights()
 
     # init model
-    if args.checkpoint is not None:
+    restore_ckpt = input("Which number checkpoint to restore from? [Enter to skip]")
+    if restore_ckpt is not "":
+        model_find = os.path.join(args.checkpoint, "ckpt_"+restore_ckpt)
+        model.load_weights(model_find)
+        logger.info('Restored weights from {}.'.format(model_find))
+    
+    elif args.checkpoint is not None:
         model_find = tf.train.latest_checkpoint(args.checkpoint)
+
         if model_find is not None:
             model.load_weights(model_find)
             logger.info('Restored weights from {}.'.format(model_find))
