@@ -14,8 +14,9 @@
 
 
 # Modified by Tianyi to allow for a more suitable development environment for TensorRT optimization
+# Also installs Bazel to build Tensorflow 2.x C++ from source
 
-ARG CUDA_VERSION=11.3.1
+ARG CUDA_VERSION=11.2.2
 ARG OS_VERSION=18.04
 
 # Disable warning about "apt-utils" not being installed
@@ -39,12 +40,13 @@ RUN mkdir -p /workspace && chown trtuser /workspace
 RUN mkdir -p /tmp && chmod 1777 /tmp
 
 # Install requried libraries
-RUN apt update && apt install -y software-properties-common
+RUN apt update
+RUN apt install -y software-properties-common
 RUN add-apt-repository ppa:ubuntu-toolchain-r/test
 RUN apt update && apt install -y --no-install-recommends \
     libcurl4-openssl-dev wget zlib1g-dev git pkg-config sudo ssh libssl-dev \
     pbzip2 pv bzip2 unzip devscripts lintian fakeroot dh-make build-essential \
-    nano tree libprotobuf-dev protobuf-compiler 
+    nano tree libprotobuf-dev protobuf-compiler apt-transport-https
 
 # installs miniconda
 RUN apt update --fix-missing && apt install -y ca-certificates \
@@ -55,8 +57,8 @@ RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-4.7.12-Linux-x86
     /bin/bash ~/miniconda.sh -b -p /opt/conda && \
     rm ~/miniconda.sh
 RUN ln -s /opt/conda/etc/profile.d/conda.sh /etc/profile.d/conda.sh
-RUN echo ". /opt/conda/etc/profile.d/conda.sh" >> /.bashrc && \
-    echo "conda activate base" >> /.bashrc
+RUN echo ". /opt/conda/etc/profile.d/conda.sh" >> /root/.bashrc && \
+    echo "conda activate base" >> /root/.bashrc
 
 RUN apt install -y curl grep sed dpkg && \
     TINI_VERSION=`curl https://github.com/krallin/tini/releases/latest | grep -o "/v.*\"" | sed 's:^..\(.*\).$:\1:'` && \
@@ -73,8 +75,15 @@ RUN conda update -n base -c defaults conda
 
 # end install miniconda
 
-# Install TensorRT
-RUN v="${TRT_VERSION%.*}-1+cuda${CUDA_VERSION%.*}" &&\
+# install Bazel
+RUN curl -fsSL https://bazel.build/bazel-release.pub.gpg | gpg --dearmor > /etc/apt/trusted.gpg.d/bazel.gpg
+RUN echo "deb [arch=amd64] https://storage.googleapis.com/bazel-apt stable jdk1.8" | sudo tee /etc/apt/sources.list.d/bazel.list
+RUN apt update && apt install bazel-3.7.2
+RUN ln -s /usr/bin/bazel-3.7.2 /usr/bin/bazel
+
+# Install TensorRT; hard-codes CUDA_VERSION to be 11.3 - 11.2 is not a supported config, annoyingly
+# RUN v="${TRT_VERSION%.*}-1+cuda${CUDA_VERSION%.*}" &&\
+RUN v="${TRT_VERSION%.*}-1+cuda11.3" &&\
     apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/7fa2af80.pub &&\
     apt update &&\
     sudo apt install libnvinfer8=${v} libnvonnxparsers8=${v} libnvparsers8=${v} libnvinfer-plugin8=${v} \
@@ -118,8 +127,8 @@ ENV LD_LIBRARY_PATH="/opt/conda/envs/tf2/lib/python3.7/site-packages/tensorflow/
 
 # Enable the conda env as well as colour terminal
 RUN echo "Recovering things at the end"
-RUN sed -i "s|activate base|activate tf2|g" /.bashrc
-RUN sed -i "s|#force_color|force_color|g" /.bashrc
+RUN sed -i "s|activate base|activate tf2|g" /root/.bashrc
+RUN sed -i "s|#force_color|force_color|g" /root/.bashrc
 
 USER trtuser
 RUN ["/bin/bash"]
