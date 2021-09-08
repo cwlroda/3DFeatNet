@@ -152,7 +152,7 @@ To run the timing benchmarks for the TensorRT converted model, first build the e
 
 Subsequently, run the inference in `3DFeatNet/TensorRT`:
 ```bash
-./inference_trt --input ../example_data/*.bin --model ./model_det_desc.lib
+./inference_trt --input /workspace/oxford_clusters/clusters_test/*.bin --model ./model_det_desc.lib
 ```
 
 Subsequently, you can move the file to the `CSLM` directory (or wherever you need to use it), and call inference there. The code to run inference using the TensorRT engine is quite convoluted, and not covered here. It is in the `CSLM` directory.
