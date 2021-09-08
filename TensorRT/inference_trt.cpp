@@ -19,6 +19,7 @@ limitations under the License.
 #include <iostream>
 #include <memory>
 #include <sstream>
+#include <chrono>
 
 #include <cuda_runtime_api.h>
 #include "NvInfer.h"
@@ -74,7 +75,6 @@ int main(int argc, char** argv)
 
             exit(1);
         }
-
     }
 
     // Check if vectors are not empty
@@ -83,73 +83,83 @@ int main(int argc, char** argv)
         exit(1);
     }
 
+    std::chrono::milliseconds avgExecutionTime(0);
+
     gLogInfo << "Input Files: (" << INPUT_FILES.size() << "):" << std::endl;
-    for (auto a : INPUT_FILES) gLogInfo << "    " << a << std::endl;
+    // for (auto a : INPUT_FILES) gLogInfo << "    " << a << std::endl;
     gLogInfo << "Output Directory: " << OUTPUT_DIR << std::endl;
 
     gLogInfo << "Constructing Feat3dNet Inference model at path "
         << MODEL_PATH << std::endl;
     Feat3dNet model(MODEL_PATH);
 
+    int fileIndex = 0;
     // Perform inference for each of the files
     for( auto input_file : INPUT_FILES ) {
-        // Load point cloud as array.
-        
-        std::vector<float> pc;
         const int BATCH_SIZE = 1;
         const int descriptorDim = 32;   // num filters for attention
         const int POINT_DIM = 3;
-        gLogInfo << "#### Processing bin file \'" << input_file << "\'..." << std::endl;
-        const int NUM_POINTS = ReadVariableFromBin(pc, input_file, DIMS);
-        gLogInfo << "#### Read float from bin file with length " << pc.size() 
-            << " and num elements: " << pc.size()/DIMS << std::endl;
+        gLogInfo << "#### Processing bin file [ " << fileIndex++ << " / " 
+            << INPUT_FILES.size() << " ] \'" << input_file << "\'..." << std::endl;
+
+        // Find size of bin file
+        std::ifstream binFile(input_file, std::ios::binary);
+        binFile.seekg(0, std::ifstream::end);
+        auto FLEN = binFile.tellg() / sizeof(float);
+        binFile.seekg(0, std::ifstream::beg);
+        const int NUM_POINTS = FLEN / DIMS;
+
+        gLogInfo << "#### Found float from bin file with length " << FLEN 
+            << " and num elements: " << NUM_POINTS << std::endl;
+
+        std::unique_ptr<float> pointcloudIn ( new float[NUM_POINTS*DIMS] );
+        std::unique_ptr<float> keypointsIn ( new float[NUM_POINTS*POINT_DIM] );
+        std::unique_ptr<float> featuresOut (new float[NUM_POINTS*descriptorDim]);
+        std::unique_ptr<float> attentionOut (new float[NUM_POINTS]);
+
+        float f;    // acc for current coordinate
+        int pcIndex=0, kpIndex=0;
+        while( binFile.read(reinterpret_cast<char*>(&f), sizeof(float)) ){
+            pointcloudIn.get()[pcIndex] = f;
+            // Only add to keypoints for the first 3 elements
+            if (pcIndex % 6 < 3) keypointsIn.get()[kpIndex++] = f;
+            
+            pcIndex += 1;
+        }
 
         // ? Randomise points (if necessary)
         // ? Downsample points (if necessary)
-        
-        // ! Only if RAM allows for it. If not, have to process in batches.
-        // Compute attention in batches due to limited memory
-        // Run inference here
-        
-        std::unique_ptr<float> pointcloudIn ( new float[BATCH_SIZE*NUM_POINTS*DIMS] );
-        std::unique_ptr<float> keypointsIn ( new float[BATCH_SIZE*NUM_POINTS*POINT_DIM] );
-        std::unique_ptr<float> featuresOut (new float[BATCH_SIZE*NUM_POINTS*descriptorDim]);
-        std::unique_ptr<float> attentionOut (new float[BATCH_SIZE*NUM_POINTS]);
+        //? Compute attention in batches due to limited memory
+        //? Only if RAM allows for it. If not, have to process in batches.
 
-        // copy into model
-        for(int i=0; i<NUM_POINTS; i++){
-            pointcloudIn.get()[i*DIMS + 0] = pc[i*DIMS + 0];
-            pointcloudIn.get()[i*DIMS + 1] = pc[i*DIMS + 1];
-            pointcloudIn.get()[i*DIMS + 2] = pc[i*DIMS + 2];
-            pointcloudIn.get()[i*DIMS + 3] = pc[i*DIMS + 3];
-            pointcloudIn.get()[i*DIMS + 4] = pc[i*DIMS + 4];
-            pointcloudIn.get()[i*DIMS + 5] = pc[i*DIMS + 5];
-
-            keypointsIn.get()[i*POINT_DIM + 0] = pc[i*DIMS + 0];
-            keypointsIn.get()[i*POINT_DIM + 1] = pc[i*DIMS + 1];
-            keypointsIn.get()[i*POINT_DIM + 2] = pc[i*DIMS + 2];
-        }
-
-        gLogInfo << "#### Finished writing to input buffers." << std::endl;
-
+        auto start = std::chrono::high_resolution_clock::now();
         bool status = model.infer(pointcloudIn, keypointsIn, NUM_POINTS, DIMS, 
                                     featuresOut, attentionOut);
+        auto stop = std::chrono::high_resolution_clock::now();
+
+        // free memory
+        pointcloudIn.release();
+        keypointsIn.release();
+        featuresOut.release();
+        attentionOut.release();
 
         if (!status) {
             gLogError << "Error in calling the forward pass!" << std::endl;
             exit(1);
+        } else {
+            auto infer_duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop-start);
+            gLogInfo << "#### Forward pass took " << infer_duration.count() << "ms." << std::endl;
+            avgExecutionTime += infer_duration;
+
         }
 
-        gLogInfo << "Successfully ran inference for file " << input_file << std::endl;
-
-        // nms to select keypoints based on attention
-
-        // Compute features
-        // Run inference here again
-
-        // Save the output
+        gLogInfo << "Successfully ran inference for file " << input_file << std::endl << std::endl;
     }
 
-    // gLogInfo << "Running TensorRT inference for 3DFeatNet" << std::endl;
+    int avgExecution = avgExecutionTime.count()/INPUT_FILES.size();
+    gLogInfo << "On a total of " << INPUT_FILES.size() << " files, 3DFeatNet accelerated "
+        << "by TensorRT took an average of " << avgExecution 
+        << "ms to run." << std::endl;
+
     return 0;
 }
