@@ -7,6 +7,7 @@
 #include <iostream>
 #include <memory>
 #include <sstream>
+#include <chrono>
 
 #include <cuda_runtime_api.h>
 #include "NvInfer.h"
@@ -36,6 +37,7 @@ private:
     nvinfer1::Dims mInputDims;          // The dimensions of the input to the network.
     nvinfer1::Dims mOutputDims;         // The dimensions of the output to the network.
     util::UniquePtr<nvinfer1::ICudaEngine> mEngine;
+    util::UniquePtr<nvinfer1::IExecutionContext> mContext;
     // The TensorRT engine used to run the network
 };
 
