@@ -130,7 +130,10 @@ This builds the grouping ops `QueryBallPoint` and `GroupPoint`, and puts their `
 
 Navigate to the 3DFeatNet repo in the container workspace and run the following:
 ```bash
-trtexec --onnx=./onnx_models/model_det_desc.onnx \
+trtexec --onnx=./onnx_models/model_det_desc.onnx --explicitBatch \
+--minShapes=in_keypoints:1x10x3,in_pointcloud:1x10x6 \
+--optShapes=in_keypoints:1x16383x3,in_pointcloud:1x16383x6 \
+--maxShapes=in_keypoints:1x65535x3,in_pointcloud:1x65535x6 \
 --plugins=./TensorRT/ops/grouping/build/libPointNetGroupingOps.so \
 --plugins=./TensorRT/ops/sign/build/libSignOps.so \
 --saveEngine=./TensorRT/model_det_desc.lib
@@ -144,6 +147,13 @@ trtexec --shapes=in_pointcloud:1x16384x6,in_keypoints:1x16384x3 \
 --plugins=./TensorRT/ops/sign/build/libSignOps.so
 ```
 It should output something like `&&&& PASSED TensorRT.trtexec [TensorRT v8001]...`.
+
+To run the timing benchmarks for the TensorRT converted model, first build the engine by calling `make all` in the `TensorRT` subdirectory in `3DFeatNet`. Note that this calls some needed headers in the **main** `TensorRT` repo that was cloned as part of the Docker image build process, so **be sure** that both `3DFeatNet` and the official `TensorRT` repo are in the same parent directory mounted as a Docker volume.
+
+Subsequently, run the inference in `3DFeatNet/TensorRT`:
+```bash
+./inference_trt --input ../example_data/*.bin --model ./model_det_desc.lib
+```
 
 Subsequently, you can move the file to the `CSLM` directory (or wherever you need to use it), and call inference there. The code to run inference using the TensorRT engine is quite convoluted, and not covered here. It is in the `CSLM` directory.
 
