@@ -25,7 +25,7 @@ from utils import get_tensors_in_checkpoint_file
 # Defaults
 CKPT_PATH = './ckpt/'
 MAX_POINTS = 30000
-TEST_NUM = 750
+TEST_NUM = 1000
 
 # Arguments
 parser = argparse.ArgumentParser(description='Trains pointnet')
