@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.8 FATAL_ERROR)
 project(PointNetGroupingOps LANGUAGES CXX CUDA)
 
 # Enable all compile warnings
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-long-long -pedantic -Wno-deprecated-declarations")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -fPIC -Wno-long-long -pedantic -Wno-deprecated-declarations")
 
 # Sets variable to a value if variable is unset.
 macro(set_ifndef var val)
@@ -32,7 +32,7 @@ include_directories(
   ${CUDA_INC_DIR} ${TRT_INCLUDE} ${CMAKE_SOURCE_DIR}   ${CMAKE_SOURCE_DIR}/../..
 )
 
-# Define clip plugin library target.
+# Define plugin library target.
 add_library(PointNetGroupingOps MODULE
   ${CMAKE_SOURCE_DIR}/../../noisy_assert.h
   ${CMAKE_SOURCE_DIR}/../../../tf_ops/grouping/tf_grouping_g.cu
