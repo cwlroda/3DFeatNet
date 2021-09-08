@@ -99,6 +99,7 @@ int main(int argc, char** argv)
         const int BATCH_SIZE = 1;
         const int descriptorDim = 32;   // num filters for attention
         const int POINT_DIM = 3;
+        gLogInfo << "#### Processing bin file \'" << input_file << "\'..." << std::endl;
         const int NUM_POINTS = ReadVariableFromBin(pc, input_file, DIMS);
         gLogInfo << "#### Read float from bin file with length " << pc.size() 
             << " and num elements: " << pc.size()/DIMS << std::endl;
