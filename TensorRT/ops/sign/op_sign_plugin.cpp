@@ -257,22 +257,29 @@ int32_t SignOpPlugin::enqueue
         const void *const *inputs, void *const *outputs, 
         void *workspace, cudaStream_t stream) noexcept{
     
-    int n;
+    int n = 1;
     assertm( (inputDesc[0].type==DataType::kINT32 || inputDesc[0].type==DataType::kFLOAT),
         "Sign Op only supports int32 and float32 implementation!"
     );
 
+    // std::cout << "Input to Sign has " << inputDesc->dims.nbDims << " dimensions.\n";
+    // for (int i=0; i<inputDesc->dims.nbDims; i++){
+    //     std::cout << "Dimension [" << i << "] has length " << inputDesc->dims.d[i] << std::endl;
+    //     n *= inputDesc->dims.d[i];
+    // }
+    // std::cout << "Size of input buffer is thus " << n << std::endl;
+
     // get handlers to input and output tensors and launch inference kernel
     switch (inputDesc[0].type){
         case DataType::kINT32: {
-            n = sizeof(inputs) / sizeof(int32_t);
+            // n = sizeof(inputs) / sizeof(int32_t);
             const int32_t* in = static_cast<const int32_t*>(inputs[0]);
             int32_t* out = static_cast<int32_t*>(outputs[0]);
             signOpLauncher(n, in, out);
             break;
         }
         case DataType::kFLOAT: {
-            n = sizeof(inputs) / sizeof(float);
+            // n = sizeof(inputs) / sizeof(float);
             const float* in = static_cast<const float*>(inputs[0]);
             float* out = static_cast<float*>(outputs[0]);
             signOpLauncher(n, in, out);
@@ -280,7 +287,8 @@ int32_t SignOpPlugin::enqueue
         }
         default: {
             // Noisily refuse to handle the other datatypes
-            printf("Invalid input data type: %d\n", (int32_t)inputDesc[0].type);
+            std::string errmsg("Invalid input data type: %d\n", (int32_t)inputDesc[0].type); 
+            assertm(false, errmsg);
         }
     }
     
