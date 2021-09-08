@@ -5,7 +5,7 @@ using sample::gLogInfo; // logger shenanigans
 using sample::gLogVerbose;
 
 Feat3dNet::Feat3dNet(const std::string& engineFilename)
-    : mEngineFilename(engineFilename), mEngine(nullptr){
+    : mEngineFilename(engineFilename), mEngine(nullptr), mContext(nullptr){
 
     // Get plugin from registry
     QueryBallPointPluginCreator qbpCreator;
@@ -39,6 +39,9 @@ Feat3dNet::Feat3dNet(const std::string& engineFilename)
     };
     mEngine.reset(runtime->deserializeCudaEngine(engineData.data(), fsize, nullptr));
     assert(mEngine.get() != nullptr);
+
+    mContext.reset( mEngine->createExecutionContext() );
+    assert(mContext.get() != nullptr);
 }
 
 /* Runs the TensorRT inference for Feat3dNet.
@@ -52,12 +55,12 @@ bool Feat3dNet::infer(std::unique_ptr<float> &aPointcloud,
                 std::unique_ptr<float> &features_buffer,
                 std::unique_ptr<float> &attention_buffer
         ) {
-    auto context = 
-        util::UniquePtr<nvinfer1::IExecutionContext>(mEngine->createExecutionContext());
-    if (!context) {
-        gLogError << "Error creating execution context from engine." << std::endl;
-        return false;
-    }
+    // auto context = 
+    //     util::UniquePtr<nvinfer1::IExecutionContext>(mEngine->createExecutionContext());
+    // if (!context) {
+    //     gLogError << "Error creating execution context from engine." << std::endl;
+    //     return false;
+    // }
     /*
     3DFeatNet has one input and three output tensors.
     Inputs:
@@ -92,7 +95,7 @@ bool Feat3dNet::infer(std::unique_ptr<float> &aPointcloud,
     }
     assert(mEngine->getBindingDataType(pointcloud_idx) == nvinfer1::DataType::kFLOAT);
     auto pointcloud_dims = nvinfer1::Dims3{1, num_points, dims};
-    context->setBindingDimensions(pointcloud_idx, pointcloud_dims);
+    mContext->setBindingDimensions(pointcloud_idx, pointcloud_dims);
     auto pointcloud_size = util::getMemorySize(pointcloud_dims, sizeof(float));
 
     // get bindings for Keypoints
@@ -103,7 +106,7 @@ bool Feat3dNet::infer(std::unique_ptr<float> &aPointcloud,
     }
     assert(mEngine->getBindingDataType(keypoints_idx) == nvinfer1::DataType::kFLOAT);
     auto keypoint_dims = nvinfer1::Dims3{1, num_points, 3};
-    context->setBindingDimensions(keypoints_idx, keypoint_dims);
+    mContext->setBindingDimensions(keypoints_idx, keypoint_dims);
     auto keypoints_size = util::getMemorySize(keypoint_dims, sizeof(float));
     
     // get bindings for out_keypoints
@@ -113,7 +116,7 @@ bool Feat3dNet::infer(std::unique_ptr<float> &aPointcloud,
         return false;
     }
     assert(mEngine->getBindingDataType(kp_out_idx) == nvinfer1::DataType::kFLOAT);
-    auto kp_out_dims = context->getBindingDimensions(kp_out_idx);
+    auto kp_out_dims = mContext->getBindingDimensions(kp_out_idx);
     auto kp_out_size = util::getMemorySize(kp_out_dims, sizeof(float));
 
     // get bindings for Features
@@ -123,7 +126,7 @@ bool Feat3dNet::infer(std::unique_ptr<float> &aPointcloud,
         return false;
     }
     assert(mEngine->getBindingDataType(features_idx) == nvinfer1::DataType::kFLOAT);
-    auto features_dims = context->getBindingDimensions(features_idx);
+    auto features_dims = mContext->getBindingDimensions(features_idx);
     auto features_size = util::getMemorySize(features_dims, sizeof(float));
 
     // get bindings for Attention
@@ -133,7 +136,7 @@ bool Feat3dNet::infer(std::unique_ptr<float> &aPointcloud,
         return false;
     }
     assert(mEngine->getBindingDataType(attention_idx) == nvinfer1::DataType::kFLOAT);
-    auto attention_dims = context->getBindingDimensions(attention_idx);
+    auto attention_dims = mContext->getBindingDimensions(attention_idx);
     auto attention_size = util::getMemorySize(attention_dims, sizeof(float));
     //~ end get bindings for input and outputs
 
@@ -178,6 +181,7 @@ bool Feat3dNet::infer(std::unique_ptr<float> &aPointcloud,
         return false;
     }
 
+    auto start_mcpy1 = std::chrono::high_resolution_clock::now();
     // Copy point cloud data to input binding memory
     if (cudaMemcpyAsync(pointcloud_mem, aPointcloud.get()
     , pointcloud_size, 
@@ -194,23 +198,31 @@ bool Feat3dNet::infer(std::unique_ptr<float> &aPointcloud,
             << keypoints_size << " bytes" << std::endl;
         return false;
     }
+    auto stop_mcpy1 = std::chrono::high_resolution_clock::now();
+    auto mcpy1_duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop_mcpy1-start_mcpy1);
+    gLogInfo << "%%%% Copying args took " << mcpy1_duration.count() << "ms." << std::endl;        
 
     cudaStreamSynchronize(stream);
 
+    auto start = std::chrono::high_resolution_clock::now();
     //~ Run TensorRT inference
     //! For testing, found that all inputs/output tensors must be represented
     //! here with the proper dimensions!
     //? Perhaps all bindings are not needed, and some CUDA memory can be saved??
     void* bindings[] = {keypoints_mem, pointcloud_mem, kp_out_mem, features_mem, attention_mem};
-    bool status = context->enqueueV2(bindings, stream, nullptr);
+    bool status = mContext->enqueueV2(bindings, stream, nullptr);
     if (!status) {
         gLogError << "ERROR: TensorRT inference failed" << std::endl;
         return false;
     } else {
         gLogVerbose << "TensorRT Inference successful." << std::endl;
     }
+    auto stop = std::chrono::high_resolution_clock::now();
+    auto infer_duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop-start);
+    gLogInfo << "%%%% Computation took " << infer_duration.count() << "ms." << std::endl;        
 
     //~ Copy predictions from output binding memory.
+    auto start_mcpy2 = std::chrono::high_resolution_clock::now();
     // Copy features
     if (cudaMemcpyAsync(features_buffer.get(), features_mem, features_size, 
         cudaMemcpyDeviceToHost, stream) != cudaSuccess) {
@@ -228,6 +240,10 @@ bool Feat3dNet::infer(std::unique_ptr<float> &aPointcloud,
         return false;
     }
     cudaStreamSynchronize(stream);
+
+    auto stop_mcpy2 = std::chrono::high_resolution_clock::now();
+    auto mcpy2_duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop_mcpy2-start_mcpy2);
+    gLogInfo << "%%%% Copying output took " << mcpy2_duration.count() << "ms." << std::endl; 
 
     // Free CUDA resources
     cudaFree(pointcloud_mem);
