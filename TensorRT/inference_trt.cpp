@@ -97,7 +97,7 @@ int main(int argc, char** argv)
 
     int fileIndex = 0;
     std::chrono::microseconds avgExecutionTime(0);
-    int INFER_COUNT = 750;
+    int INFER_COUNT = 1500;
     INFER_COUNT = INPUT_FILES.size() < INFER_COUNT ? INPUT_FILES.size() : INFER_COUNT;
 
     // Perform inference for each of the files
@@ -154,7 +154,6 @@ int main(int argc, char** argv)
             auto infer_duration = std::chrono::duration_cast<std::chrono::microseconds>(stop-start);
             gLogInfo << "#### Forward pass took " << infer_duration.count() << "us." << std::endl;
             avgExecutionTime += infer_duration;
-
         }
 
         gLogInfo << "Successfully ran inference for file " << input_file << std::endl << std::endl;
