@@ -48,6 +48,9 @@ using sample::gLogVerbose;
 std::vector<std::string> INPUT_FILES;
 std::string OUTPUT_DIR = "./TensorRT/infer_out";
 std::string MODEL_PATH = "./TensorRT/model_infer.lib";
+const int BATCH_SIZE = 1;
+const int descriptorDim = 32;   // num filters for attention
+const int POINT_DIM = 3;
 const int DIMS = 6;
 int MAX_KEYPOINTS = 1024;
 
@@ -83,7 +86,6 @@ int main(int argc, char** argv)
         exit(1);
     }
 
-    std::chrono::milliseconds avgExecutionTime(0);
 
     gLogInfo << "Input Files: (" << INPUT_FILES.size() << "):" << std::endl;
     // for (auto a : INPUT_FILES) gLogInfo << "    " << a << std::endl;
@@ -94,12 +96,13 @@ int main(int argc, char** argv)
     Feat3dNet model(MODEL_PATH);
 
     int fileIndex = 0;
+    std::chrono::microseconds avgExecutionTime(0);
+    int INFER_COUNT = 750;
+    INFER_COUNT = INPUT_FILES.size() < INFER_COUNT ? INPUT_FILES.size() : INFER_COUNT;
+
     // Perform inference for each of the files
     for( auto input_file : INPUT_FILES ) {
-        const int BATCH_SIZE = 1;
-        const int descriptorDim = 32;   // num filters for attention
-        const int POINT_DIM = 3;
-        gLogInfo << "#### Processing bin file [ " << fileIndex++ << " / " 
+        gLogInfo << "#### Processing bin file [ " << fileIndex << " / " 
             << INPUT_FILES.size() << " ] \'" << input_file << "\'..." << std::endl;
 
         // Find size of bin file
@@ -107,6 +110,7 @@ int main(int argc, char** argv)
         binFile.seekg(0, std::ifstream::end);
         auto FLEN = binFile.tellg() / sizeof(float);
         binFile.seekg(0, std::ifstream::beg);
+
         const int NUM_POINTS = FLEN / DIMS;
 
         gLogInfo << "#### Found float from bin file with length " << FLEN 
@@ -147,19 +151,23 @@ int main(int argc, char** argv)
             gLogError << "Error in calling the forward pass!" << std::endl;
             exit(1);
         } else {
-            auto infer_duration = std::chrono::duration_cast<std::chrono::milliseconds>(stop-start);
-            gLogInfo << "#### Forward pass took " << infer_duration.count() << "ms." << std::endl;
+            auto infer_duration = std::chrono::duration_cast<std::chrono::microseconds>(stop-start);
+            gLogInfo << "#### Forward pass took " << infer_duration.count() << "us." << std::endl;
             avgExecutionTime += infer_duration;
 
         }
 
         gLogInfo << "Successfully ran inference for file " << input_file << std::endl << std::endl;
+    
+        if (fileIndex++ > INFER_COUNT){
+            break;
+        }
     }
 
-    int avgExecution = avgExecutionTime.count()/INPUT_FILES.size();
-    gLogInfo << "On a total of " << INPUT_FILES.size() << " files, 3DFeatNet accelerated "
+    int avgExecution = avgExecutionTime.count()/fileIndex;
+    gLogInfo << "On a total of " << fileIndex << " files, 3DFeatNet accelerated "
         << "by TensorRT took an average of " << avgExecution 
-        << "ms to run." << std::endl;
+        << "us to run." << std::endl;
 
     return 0;
 }
