@@ -12,19 +12,19 @@ Feat3dNet::Feat3dNet(const std::string& engineFilename)
     GroupPointPluginCreator gpCreator;
     SignOpPluginCreator sgnCreator;
 
-    gLogInfo << "Adding custom plugins... "<< std::endl;
+    gLogVerbose << "Adding custom plugins... "<< std::endl;
     initLibNvInferPlugins( getLogger(), qbpCreator.getPluginNamespace() );
-    gLogInfo << "#### QueryBallPoint Namespace: " << qbpCreator.getPluginNamespace() << std::endl;
+    gLogVerbose << "#### QueryBallPoint Namespace: " << qbpCreator.getPluginNamespace() << std::endl;
     initLibNvInferPlugins( getLogger(), gpCreator.getPluginNamespace() );
-    gLogInfo << "#### GroupPoint Namespace: " << gpCreator.getPluginNamespace() << std::endl;
+    gLogVerbose << "#### GroupPoint Namespace: " << gpCreator.getPluginNamespace() << std::endl;
     initLibNvInferPlugins( getLogger(), sgnCreator.getPluginNamespace() );
-    gLogInfo << "#### Sign_Op Namespace: " << sgnCreator.getPluginNamespace() << std::endl;
+    gLogVerbose << "#### Sign_Op Namespace: " << sgnCreator.getPluginNamespace() << std::endl;
 
     // De-serialize engine from file
     std::ifstream engineFile(engineFilename, std::ios::binary);
     if (engineFile.fail()) {
         gLogError << "ERROR: Unable to deserialize engine from file." << std::endl;
-        return;
+        exit(1);
     }
 
     engineFile.seekg(0, std::ifstream::end);
@@ -70,17 +70,17 @@ bool Feat3dNet::infer(std::unique_ptr<float> &aPointcloud,
     Input data is passed in as {}.
     */
 
-    gLogInfo << "#### Input dimensions for point cloud: [" << 1 << ", " << num_points 
+    gLogVerbose << "#### Input dimensions for point cloud: [" << 1 << ", " << num_points 
                 << ", " << dims << "]\n";
 
     // auto profile = context->getOptimizationProfile();
-    auto nbProfiles = mEngine->getNbOptimizationProfiles();
-    gLogInfo << "#### Execution context has " << nbProfiles << " optimization profiles." << std::endl;
+    // auto nbProfiles = mEngine->getNbOptimizationProfiles();
+    // gLogVerbose << "#### Execution context has " << nbProfiles << " optimization profiles." << std::endl;
 
-    auto expectedDims = context->getBindingDimensions(1);
-    for (int i=0; i<expectedDims.nbDims; i++){
-        gLogInfo << "Pointcloud dimension [" << i << "]: " << expectedDims.d[i] << std::endl;
-    }
+    // auto expectedDims = context->getBindingDimensions(1);
+    // for (int i=0; i<expectedDims.nbDims; i++){
+    //     gLogVerbose << "Pointcloud dimension [" << i << "]: " << expectedDims.d[i] << std::endl;
+    // }
 
 
     //~ get bindings for input and outputs
@@ -105,6 +105,16 @@ bool Feat3dNet::infer(std::unique_ptr<float> &aPointcloud,
     auto keypoint_dims = nvinfer1::Dims3{1, num_points, 3};
     context->setBindingDimensions(keypoints_idx, keypoint_dims);
     auto keypoints_size = util::getMemorySize(keypoint_dims, sizeof(float));
+    
+    // get bindings for out_keypoints
+    auto kp_out_idx = mEngine->getBindingIndex("out_keypoints");
+    if (kp_out_idx == -1) {
+        gLogError << "Unable to find output with name 'out_keypoints'." << std::endl;
+        return false;
+    }
+    assert(mEngine->getBindingDataType(kp_out_idx) == nvinfer1::DataType::kFLOAT);
+    auto kp_out_dims = context->getBindingDimensions(kp_out_idx);
+    auto kp_out_size = util::getMemorySize(kp_out_dims, sizeof(float));
 
     // get bindings for Features
     auto features_idx = mEngine->getBindingIndex("out_features");
@@ -127,7 +137,7 @@ bool Feat3dNet::infer(std::unique_ptr<float> &aPointcloud,
     auto attention_size = util::getMemorySize(attention_dims, sizeof(float));
     //~ end get bindings for input and outputs
 
-    gLogInfo << "#### Attempting to allocate CUDA memory..." << std::endl;
+    gLogVerbose << "#### Attempting to allocate CUDA memory..." << std::endl;
 
     //~ Allocate CUDA memory for input and output bindings
     void* pointcloud_mem{nullptr};
@@ -140,6 +150,12 @@ bool Feat3dNet::infer(std::unique_ptr<float> &aPointcloud,
     if (cudaMalloc(&keypoints_mem, keypoints_size) != cudaSuccess){
         gLogError << "ERROR: keypoints cuda memory allocation failed, size = " 
             << keypoints_size << " bytes" << std::endl;
+        return false;
+    }
+    void* kp_out_mem{nullptr};
+    if (cudaMalloc(&kp_out_mem, kp_out_size) != cudaSuccess){
+        gLogError << "ERROR: out_keypoints cuda memory allocation failed, size = " 
+            << kp_out_size << " bytes" << std::endl;
         return false;
     }
     void* features_mem{nullptr};
@@ -181,12 +197,17 @@ bool Feat3dNet::infer(std::unique_ptr<float> &aPointcloud,
 
     cudaStreamSynchronize(stream);
 
-    // Run TensorRT inference
-    void* bindings[] = {pointcloud_mem, keypoints_mem, features_mem, attention_mem};
+    //~ Run TensorRT inference
+    //! For testing, found that all inputs/output tensors must be represented
+    //! here with the proper dimensions!
+    //? Perhaps all bindings are not needed, and some CUDA memory can be saved??
+    void* bindings[] = {keypoints_mem, pointcloud_mem, kp_out_mem, features_mem, attention_mem};
     bool status = context->enqueueV2(bindings, stream, nullptr);
     if (!status) {
         gLogError << "ERROR: TensorRT inference failed" << std::endl;
         return false;
+    } else {
+        gLogVerbose << "TensorRT Inference successful." << std::endl;
     }
 
     //~ Copy predictions from output binding memory.
@@ -211,6 +232,7 @@ bool Feat3dNet::infer(std::unique_ptr<float> &aPointcloud,
     // Free CUDA resources
     cudaFree(pointcloud_mem);
     cudaFree(keypoints_mem);
+    cudaFree(kp_out_mem);
     cudaFree(features_mem);
     cudaFree(attention_mem);
     return true;
