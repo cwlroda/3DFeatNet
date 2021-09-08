@@ -14,41 +14,28 @@
 #include "util.h"
 
 #include "noisy_assert.h"
-
-// #include <Eigen/Dense>
-#include <unsupported/Eigen/CXX11/Tensor>
-
-extern int MAX_KEYPOINTS;   // for use elsewhere
-
-typedef Eigen::Tensor<float, 3> pointcloud_t;
-// typedef std::vector<std::vector<std::vector<float>>> pointcloud_t;
-
-// Container for output of inference (3 outputs)
-struct infer_output {
-    float *keypoints, *features, *attention;
-    int32_t num_points, dimension=3;
-    // float *keypoints, *features, *attention;
-    // int keypoints_size, features_size, attention_size;
-};
-
-// non-max suppression
-infer_output nms(pointcloud_t &keypoints, pointcloud_t &attention); 
+#include "ops/grouping/grouping_plugin.h"
+#include "ops/sign/sign_op_plugin.h"
 
 // Reads point cloud from binary file into 1D vector.
-void ReadVariableFromBin(std::vector<float> &vect, 
-            std::string filename, const int dims=6);
+int ReadVariableFromBin(std::vector<float> &arr, 
+            std::string filename, const int dims);
 
-class Feat3dNetInference {
+class Feat3dNet {
 public:
-    Feat3dNetInference(const std::string& engineFilename);
-    bool infer(Eigen::TensorMap<pointcloud_t> &in_points, int32_t num_points,
-            int32_t dims, infer_output out_points);
+    Feat3dNet(const std::string& engineFilename);
+    bool infer(std::unique_ptr<float> &aPointcloud,
+                std::unique_ptr<float> &aKeypoints, 
+                int32_t num_points, int32_t dims,
+                std::unique_ptr<float> &features_buffer,
+                std::unique_ptr<float> &attention_buffer
+                );
 
 private:
     std::string mEngineFilename;        // Filename of the serialized engine.
     nvinfer1::Dims mInputDims;          // The dimensions of the input to the network.
     nvinfer1::Dims mOutputDims;         // The dimensions of the output to the network.
-    util::UniquePtr<nvinfer1::ICudaEngine> mEngine; 
+    util::UniquePtr<nvinfer1::ICudaEngine> mEngine;
     // The TensorRT engine used to run the network
 };
 

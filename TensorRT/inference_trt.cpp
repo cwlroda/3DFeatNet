@@ -35,6 +35,7 @@ constexpr long long operator"" _MiB(long long unsigned val)
 
 using sample::gLogError;
 using sample::gLogInfo;
+using sample::gLogVerbose;
 
 /*
 ~ Command Line Arguments
@@ -77,30 +78,30 @@ int main(int argc, char** argv)
     }
 
     // Check if vectors are not empty
-    if (OUTPUT_DIR.size() == 0) {
-        gLogError << "Output or Input directories not defined. Exiting." << std::endl;
+    if (INPUT_FILES.size() == 0) {
+        gLogError << "Input directories not defined. Exiting." << std::endl;
         exit(1);
     }
 
-    gLogInfo << "Input Files: (" << OUTPUT_DIR.size() << "):" << std::endl;
-    for (auto a : OUTPUT_DIR) gLogInfo << "    " << a << std::endl;
+    gLogInfo << "Input Files: (" << INPUT_FILES.size() << "):" << std::endl;
+    for (auto a : INPUT_FILES) gLogInfo << "    " << a << std::endl;
     gLogInfo << "Output Directory: " << OUTPUT_DIR << std::endl;
 
     gLogInfo << "Constructing Feat3dNet Inference model at path "
         << MODEL_PATH << std::endl;
-    Feat3dNetInference model(MODEL_PATH);
+    Feat3dNet model(MODEL_PATH);
 
     // Perform inference for each of the files
-    for( auto input_file : INPUT_FILES) {
+    for( auto input_file : INPUT_FILES ) {
         // Load point cloud as array.
-
-        // TODO use a better library than plain float, can try using Eigen?
+        
         std::vector<float> pc;
-        ReadVariableFromBin(pc, input_file, DIMS);
-
-        // reads pointcloud from array
-        int32_t numPoints = pc.size()/DIMS;
-        Eigen::TensorMap<pointcloud_t> pointClouds(&pc[0], 1, numPoints, DIMS);
+        const int BATCH_SIZE = 1;
+        const int descriptorDim = 32;   // num filters for attention
+        const int POINT_DIM = 3;
+        const int NUM_POINTS = ReadVariableFromBin(pc, input_file, DIMS);
+        gLogInfo << "#### Read float from bin file with length " << pc.size() 
+            << " and num elements: " << pc.size()/DIMS << std::endl;
 
         // ? Randomise points (if necessary)
         // ? Downsample points (if necessary)
@@ -108,11 +109,37 @@ int main(int argc, char** argv)
         // ! Only if RAM allows for it. If not, have to process in batches.
         // Compute attention in batches due to limited memory
         // Run inference here
-        infer_output out;
-        if (!model.infer(pointClouds, numPoints, DIMS, out)){
-            gLogError << "Error in running inference." << std::endl;
+        
+        std::unique_ptr<float> pointcloudIn ( new float[BATCH_SIZE*NUM_POINTS*DIMS] );
+        std::unique_ptr<float> keypointsIn ( new float[BATCH_SIZE*NUM_POINTS*POINT_DIM] );
+        std::unique_ptr<float> featuresOut (new float[BATCH_SIZE*NUM_POINTS*descriptorDim]);
+        std::unique_ptr<float> attentionOut (new float[BATCH_SIZE*NUM_POINTS]);
+
+        // copy into model
+        for(int i=0; i<NUM_POINTS; i++){
+            pointcloudIn.get()[i*DIMS + 0] = pc[i*DIMS + 0];
+            pointcloudIn.get()[i*DIMS + 1] = pc[i*DIMS + 1];
+            pointcloudIn.get()[i*DIMS + 2] = pc[i*DIMS + 2];
+            pointcloudIn.get()[i*DIMS + 3] = pc[i*DIMS + 3];
+            pointcloudIn.get()[i*DIMS + 4] = pc[i*DIMS + 4];
+            pointcloudIn.get()[i*DIMS + 5] = pc[i*DIMS + 5];
+
+            keypointsIn.get()[i*POINT_DIM + 0] = pc[i*DIMS + 0];
+            keypointsIn.get()[i*POINT_DIM + 1] = pc[i*DIMS + 1];
+            keypointsIn.get()[i*POINT_DIM + 2] = pc[i*DIMS + 2];
+        }
+
+        gLogInfo << "#### Finished writing to input buffers." << std::endl;
+
+        bool status = model.infer(pointcloudIn, keypointsIn, NUM_POINTS, DIMS, 
+                                    featuresOut, attentionOut);
+
+        if (!status) {
+            gLogError << "Error in calling the forward pass!" << std::endl;
             exit(1);
         }
+
+        gLogInfo << "Successfully ran inference for file " << input_file << std::endl;
 
         // nms to select keypoints based on attention
 
@@ -122,11 +149,6 @@ int main(int argc, char** argv)
         // Save the output
     }
 
-    gLogInfo << "Running TensorRT inference for 3DFeatNet" << std::endl;
-    // if (!sample.infer("input.ppm", width, height, "output.ppm"))
-    // {
-    //     return -1;
-    // }
-
+    // gLogInfo << "Running TensorRT inference for 3DFeatNet" << std::endl;
     return 0;
 }
