@@ -21,6 +21,7 @@ limitations under the License.
 #define SIGN_OP_PLUGIN_H
 
 #include "NvInferPlugin.h"
+#include "sign_op_kernel.h"
 #include <string>
 #include <vector>
 

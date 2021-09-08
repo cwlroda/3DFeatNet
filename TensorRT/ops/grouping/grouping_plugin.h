@@ -21,6 +21,7 @@ limitations under the License.
 #define GROUPING_PLUGIN_H
 
 #include "NvInferPlugin.h"
+#include "grouping_kernel.h"
 #include <string>
 #include <vector>
 

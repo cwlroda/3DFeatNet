@@ -5,7 +5,7 @@
 // for int32_t:
 __global__ void sign_op_gpu(int n, const int32_t* in, int32_t* out){
     int index = blockIdx.x * blockDim.x + threadIdx.x;
-    int stride = blockDim.x * gridDim.x;                
+    int stride = blockDim.x * gridDim.x;
     // CUDA code for element-wise operation
     for(int i=index; i<n; i+=stride){
         out[i] = (in[i] > 0) ? 1 : ( (in[i] < 0) ? -1 : 0 );
@@ -20,7 +20,7 @@ void signOpLauncher(int n, const int32_t* in, int32_t* out){
 // for float:
 __global__ void sign_op_gpu(int n, const float* in, float* out){
     int index = blockIdx.x * blockDim.x + threadIdx.x;
-    int stride = blockDim.x * gridDim.x;                
+    int stride = blockDim.x * gridDim.x;
     // CUDA code for element-wise operation
     for(int i=index; i<n; i+=stride){
         out[i] = (in[i] > 0) ? 1 : ( (in[i] < 0) ? -1 : 0 );
