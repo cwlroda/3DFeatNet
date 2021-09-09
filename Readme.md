@@ -76,7 +76,7 @@ To convert the trained model for inference into ONNX format, first wait for trai
 
 Running `inference_example.sh` in the previous step automatically converts and saves the converted ONNX model to the `onnx_models` folder.
 
-If you wish to convert the SavedModels in isolation, call the `tf2onnx.convert` submodule (should be installed as part of `requirements.txt`):
+If you wish to convert a SavedModel in isolation, call the `tf2onnx.convert` submodule (should be installed as part of `requirements.txt`):
 ```bash
 python -m tf2onnx.convert \
 --saved-model /path/to/saved/model --output /path/to/output/onnx \
@@ -130,6 +130,7 @@ This builds the grouping ops `QueryBallPoint` and `GroupPoint`, and puts their `
 
 Navigate to the 3DFeatNet repo in the container workspace and run the following:
 ```bash
+# Convert the full 3DFeatNet model
 trtexec --onnx=./onnx_models/model_det_desc.onnx --explicitBatch \
 --minShapes=in_keypoints:1x10x3,in_pointcloud:1x10x6 \
 --optShapes=in_keypoints:1x16383x3,in_pointcloud:1x16383x6 \
@@ -137,9 +138,27 @@ trtexec --onnx=./onnx_models/model_det_desc.onnx --explicitBatch \
 --plugins=./TensorRT/ops/grouping/build/libPointNetGroupingOps.so \
 --plugins=./TensorRT/ops/sign/build/libSignOps.so \
 --saveEngine=./TensorRT/model_det_desc.lib
+
+# Convert the detector network
+trtexec --onnx=./onnx_models/model_det_only.onnx --explicitBatch \
+--minShapes=in_pointcloud:1x10x6 \
+--optShapes=in_pointcloud:1x16383x6 \
+--maxShapes=in_pointcloud:1x65535x6 \
+--plugins=./TensorRT/ops/grouping/build/libPointNetGroupingOps.so \
+--plugins=./TensorRT/ops/sign/build/libSignOps.so \
+--saveEngine=./TensorRT/model_det_only.lib
+
+# Convert the descriptor network
+trtexec --onnx=./onnx_models/model_desc_only.onnx --explicitBatch \
+--minShapes=in_keypoints:1x10x3,in_pointcloud:1x10x6,in_orientation:1x10 \
+--optShapes=in_keypoints:1x16383x3,in_pointcloud:1x16383x6,in_orientation:1x16383 \
+--maxShapes=in_keypoints:1x65535x3,in_pointcloud:1x65535x6,in_orientation:1x65535 \
+--plugins=./TensorRT/ops/grouping/build/libPointNetGroupingOps.so \
+--plugins=./TensorRT/ops/sign/build/libSignOps.so \
+--saveEngine=./TensorRT/model_desc_only.lib
 ```
 
-If successful, it registers the inference engine in `./TensorRT/` as `model_det_desc.lib`. You can validate the model building by running it with random-valued data:
+If successful, it registers the inference engines in `./TensorRT/` as `model_det_desc.lib`, `model_det_only.lib`, and `model_desc_only.lib`. You can validate the model building by running it with random-valued data:
 ```bash
 trtexec --shapes=in_pointcloud:1x16384x6,in_keypoints:1x16384x3 \
 --loadEngine=./TensorRT/model_det_desc.lib \
