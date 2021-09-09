@@ -19,7 +19,7 @@ from config import *
 from data.datagenerator import DataGenerator
 
 # from models.net_factory import get_network
-from models.feat3dnet import Feat3dNet
+from models.feat3dnet import Feat3dNet, Feat3dNet_Describe, Feat3dNet_Detect
 from utils import get_tensors_in_checkpoint_file
 
 # Defaults
@@ -94,13 +94,9 @@ def compute_descriptors():
     param = {'NoRegress': False, 'BaseScale': args.base_scale, 'Attention': True,
              'num_clusters': -1, 'num_samples': args.num_samples, 'feature_dim': args.feature_dim}
 
-    # Get both Full model and Descriptor model
+    # Restore main model from checkpoints to obtain weights
     model = Feat3dNet(False, param=param)
 
-    # disable eager mode?
-    # tf.config.run_functions_eagerly(False)
-
-    # init model 1
     logger.info("Trying to find a checkpoint in {}".format(args.checkpoint))
     model_find = tf.train.latest_checkpoint(args.checkpoint)
     logger.info("Attempting to restore weights for 3DFeatNet Detect and Describe")
@@ -111,8 +107,26 @@ def compute_descriptors():
         logger.info('Unable to find a latest checkpoint in {}'.format(args.checkpoint))
         exit(1)
 
+    # Initialize Detector model
+    model_det = Feat3dNet_Detect(param=param)
+    for layer in model_det.layers:
+        layer_name = layer.name
+        logger.debug("Restored detector layer {}".format(layer_name))
+        layer.set_weights(
+            model.get_layer( layer_name ).get_weights()
+        )
+
+    # Initialize Descriptor model
+    model_desc = Feat3dNet_Describe(param=param)
+    for layer in model_desc.layers:
+        layer_name = layer.name
+        logger.debug("Restored descriptor layer {}".format(layer_name))
+        layer.set_weights(
+            model.get_layer( layer_name ).get_weights()
+        )
+
     time_avg_bypass_true = 0
-    time_avg_bypass_false = 0
+    time_avg_bypass_false = 0   # Logging
 
     num_processed = 0
     inference_iterations = min(TEST_NUM, len(binFiles))
@@ -185,6 +199,12 @@ def compute_descriptors():
             # Non maximal suppression to select keypoints based on attention
             xyz_nms, attention_nms, num_keypoints = nms(xyz, attention)
 
+            # Call the Detector model...
+            logger.debug("#### Calling the Detector model...")
+            kp_out_det, attention_det, orientation_det = model_det({"pointcloud": pointcloud})
+            # NMS for just the feature detector.
+            kp_nms_det, attention_nms_det, num_keypoints_det = nms(kp_out_det, attention_det)
+
         else:
             # Load keypoints from file
             xyz_nms = []
@@ -218,6 +238,17 @@ def compute_descriptors():
         logger.debug("Took {:0.4f}s to call one cycle of inference".format(t2-t1))
 
         time_avg_bypass_true += (t2-t1)
+
+
+        # Compute features for feature Descriptor.
+        keypoints_desc, features_desc = model_desc({
+            'pointcloud': pointclouds,
+            'keypoints': kp_out_det,
+            'orientation': orientation_det
+        })
+
+        # TODO output features to file
+
 
         # xyz, features = \
         #     sess.run([xyz_op, features_op],
@@ -254,11 +285,23 @@ def compute_descriptors():
         time_avg_bypass_true, time_avg_bypass_false, inference_iterations
     ))
 
-    logger.info("Saving inference model...")
+
+    # Save the 3 models to their respective locations!
     detect_describe_savepath = os.path.join(model_savepath, 'det_desc')
+    detect_only_savepath = os.path.join(model_savepath, 'det_only')
     describe_only_savepath = os.path.join(model_savepath, 'desc_only')
+
+    logger.info("Saving inference model...")
     model.save(detect_describe_savepath)
     logger.info("Saved 'Detect+Describe' model in {}".format(detect_describe_savepath))   
+
+    logger.info("Saving detector model...")
+    model_det.save(detect_only_savepath)
+    logger.info("Saved 'Detector' model in {}".format(detect_only_savepath))   
+
+    logger.info("Saving descriptor model...")
+    model_desc.save(describe_only_savepath)
+    logger.info("Saved 'Descriptor' model in {}".format(describe_only_savepath))   
 
 def log_arguments():
     s = '\n'.join(['    {}: {}'.format(arg, getattr(args, arg)) for arg in vars(args)])
