@@ -38,6 +38,15 @@ To begin, create a new `conda` environment in **Python 3.7**, and install the `r
 
 The network model is in `models/feat3dnet.py`.
 
+### Reources on TensorFlow:
+* Kitchen-sink guide to TensorFlow 2's syntax: https://www.tensorflow.org/guide/effective_tf2
+* Writing a custom training loop (and thus adapting from TF1's training loop): https://keras.io/guides/writing_a_training_loop_from_scratch/
+* Subclassing models: https://www.tensorflow.org/guide/keras/custom_layers_and_models
+* Taking advantage of the TF2 SavedModel format: https://www.tensorflow.org/guide/keras/save_and_serialize
+* Keras' Sequential model: https://www.tensorflow.org/guide/keras/sequential_model
+* General TF Model API: https://www.tensorflow.org/api_docs/python/tf/keras/Model
+* General TF Layer API: https://www.tensorflow.org/api_docs/python/tf/keras/layers/Layer
+
 ### Prerequisites
 
 Before using the model, you first need to compile the customized tf_ops in the folder `tf_ops` (we use the customized grouping and sampling ops from [PointNet++](https://github.com/charlesq34/pointnet2)).
@@ -116,6 +125,18 @@ source /home/trtuser/.bashrc
 bash 3DFeatNet/docker/startup.sh
 ```
 This installs the TensorRT and onnx-trt inside the Docker image. You can also edit this script to your liking.
+
+### Resources on TensorRT
+* TensorRT overview guide: https://docs.nvidia.com/deeplearning/tensorrt/developer-guide/index.html#overview
+* TensorRT quick start guide: https://docs.nvidia.com/deeplearning/tensorrt/quick-start-guide/index.html
+* Developing custom plugins in TensorRT: https://docs.nvidia.com/deeplearning/tensorrt/developer-guide/index.html#extending
+* TensorRT C++ API reference: https://docs.nvidia.com/deeplearning/tensorrt/api/c_api/classnvinfer1_1_1_i_plugin_v2_dynamic_ext.html
+
+Figuring out the syntax for `trtexec`, the command-line TensorRT tool, was largely done by reading the output of `trtexec --help`.
+
+In addition, the TensorRT GitHub repo has several useful examples with the related Readmes. Taking a look at the syntax used was helpful.
+
+Lastly, using quotations around TensorRT in a Google search might prove helpful for more specific help.
 
 ## Converting ONNX to TensorRT
 To convert the ONNX files to TensorRT, start up the Docker image as detailed above.
