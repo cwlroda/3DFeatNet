@@ -141,6 +141,15 @@ int main(int argc, char** argv)
                                     featuresOut, attentionOut);
         auto stop = std::chrono::high_resolution_clock::now();
 
+        /*
+            Pseudo-code for running separate inference:
+            model.detectInfer();
+
+            NMS
+
+            model.describeInfer();
+        */
+
         // free memory
         pointcloudIn.release();
         keypointsIn.release();

@@ -38,7 +38,7 @@ python -m tf2onnx.convert \
 --saved-model ${MODEL_SAVEPATH}/det_only \
 --output ${ONNX_SAVEPATH}/model_det_only.onnx \
 --load_op_libraries ./tf_ops/grouping/tf_grouping_so.so,./tf_ops/sampling/tf_sampling_so.so \
---rename-inputs in_keypoints
+--rename-inputs in_pointcloud
 --rename-outputs out_keypoints,out_attention,out_orientation \
 --custom-ops QueryBallPoint,GroupPoint \
 --opset ${ONNX_OPSET} --target tensorrt
