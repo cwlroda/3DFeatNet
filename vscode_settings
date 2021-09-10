@@ -1,0 +1,143 @@
+{
+    "workbench.editorAssociations": {
+        "*.ipynb": "jupyter-notebook"
+    },
+    "notebook.cellToolbarLocation": {
+        "default": "right",
+        "jupyter-notebook": "left"
+    },
+    "workbench.colorTheme": "Quiet Light",
+    "workbench.colorCustomizations": {
+        "editor.selectionHighlightBackground": "#88888844",
+        // "editor.selectionHighlightBorder": "#b19f00",
+    },
+    "editor.rulers": [
+        90
+    ],
+    "editor.renderWhitespace": "trailing",
+
+    // Excludes files and folders in search indexing
+    "search.exclude": {
+        "**/node_modules": true,
+        "**/bower_components": true,
+        "**/*.code-search": true,
+        "**/clusters": true,
+        "**/coslam": true,
+        "**/data_output": true,
+        "**/test_models": true
+    },
+
+    // Excludes files and folders for watcher service
+    "files.watcherExclude": {
+        "**/.git/objects/**": true,
+        "**/.git/subtree-cache/**": true,
+        "**/node_modules/*/**": true,
+        "**/.hg/store/**": true,
+        "**/clusters": true,
+        "**/coslam": true,
+        "**/data_output": true,
+        "**/test_models": true,
+        "**/data/oxford/**": true,
+        "**/build" : true,
+        "${workspace}/build/**": true,
+        "${workspace}/Library/**": true
+    },
+
+    "settings.cycle": [{
+        "id": "lineNumbers",
+        "values":[
+            {
+                "editor.lineNumbers": "off",
+                // "editor.folding": false,
+                "editor.glyphMargin": false
+            },
+            {
+                "editor.lineNumbers": "on",
+                // "editor.folding": true,
+                "editor.glyphMargin": true
+    
+            }
+        ]
+    }],
+
+    // Better comments
+    "better-comments.tags": [
+        {
+          "tag": "~",
+          "color": "#770000",
+          "strikethrough": false,
+          "backgroundColor": "transparent",
+          "underline": false,
+          "bold": true,
+          "italic": false
+        },
+        {
+            "tag": "?",
+            "color": "#3478BB",
+            "strikethrough": false,
+            "underline": false,
+            "backgroundColor": "transparent",
+            "bold": false,
+            "italic": true
+        },
+        {
+            "tag": "*",
+            "color": "#78A359",
+            "strikethrough": false,
+            "underline": false,
+            "backgroundColor": "transparent",
+            "bold": true,
+            "italic": false
+        },
+        {
+            "tag": "!",
+            "color": "#FF2D00",
+            "strikethrough": false,
+            "underline": false,
+            "backgroundColor": "transparent",
+            "bold": false,
+            "italic": false
+        },
+        {
+            "tag": "//",
+            "color": "#474747",
+            "strikethrough": true,
+            "underline": false,
+            "backgroundColor": "transparent",
+            "bold": false,
+            "italic": false
+        },
+        {
+            "tag": "todo",
+            "color": "#FF8C00",
+            "strikethrough": false,
+            "underline": false,
+            "backgroundColor": "#444444",
+            "bold": false,
+            "italic": false
+        },
+        {
+            "tag": "*",
+            "color": "#98C379",
+            "strikethrough": false,
+            "underline": false,
+            "backgroundColor": "transparent",
+            "bold": false,
+            "italic": false
+        }
+    ],
+    "editor.fontFamily": "'JetBrains Mono', 'Droid Sans Mono', 'monospace', monospace, 'Droid Sans Fallback'",
+
+    "editor.bracketPairColorization.enabled": true,
+    "editor.suggest.preview": true,
+    
+    // "editor.wordWrap": "on",
+    "editor.lineNumbers": "on",
+    "editor.glyphMargin": true,
+    "python.defaultInterpreterPath": "/media/intern/SSD11/conda_envs/tf2/bin/python",
+    "git.autofetch": true,
+    "explorer.confirmDragAndDrop": false,
+    "cmake.configureOnOpen": false,
+    "window.zoomLevel": -1,
+    "editor.minimap.enabled": false
+}
