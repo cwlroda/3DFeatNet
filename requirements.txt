@@ -30,7 +30,7 @@ numpy==1.19.5
 oauthlib==3.1.1
 opt-einsum==3.3.0
 pkg-resources==0.0.0
-protobuf==3.17.2
+protobuf==6.33.5
 pyasn1==0.4.8
 pyasn1-modules==0.2.8
 requests==2.25.1
@@ -53,3 +53,4 @@ urllib3==1.26.5
 Werkzeug==2.0.1
 wrapt==1.12.1
 zipp==3.4.1
+wheel>=0.46.2 # not directly required, pinned by Snyk to avoid a vulnerability
